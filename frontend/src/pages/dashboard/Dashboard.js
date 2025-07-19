@@ -1,124 +1,106 @@
+// frontend/src/pages/dashboard/Dashboard.js
 import React, { useState, useEffect } from 'react';
-import { useDispatch } from 'react-redux';
-import { getProducts } from '../../api/products';
-import { getCustomers } from '../../api/customers';
-import { getSales } from '../../api/sales';
-import { setProducts } from '../../features/products/productSlice';
-import { setCustomers } from '../../features/customers/customerSlice';
-import { setSales } from '../../features/sales/saleSlice';
+import { useDispatch, useSelector } from 'react-redux';
+// Import the thunks
+import { fetchProducts } from '../../features/products/productSlice';
+import { fetchCustomers } from '../../features/customers/customerSlice';
+import { fetchSales, fetchSalesAnalytics, fetchProductAnalytics } from '../../features/sales/saleSlice';
 
-const statCards = [
-  {
-    label: 'Total Products',
-    key: 'totalProducts',
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73z" />
-        <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-        <line x1="12" y1="22.08" x2="12" y2="12" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Total Customers',
-    key: 'totalCustomers',
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20H2v-2a3 3 0 0 1 5.356-1.857m7.5 1.857A2.75 2.75 0 0 0 13.5 16H8a2.75 2.75 0 0 0-2.75 2.75V20m9.5-11.25h.008v.008h-.008V8.75zm.75 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0z" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Total Orders',
-    key: 'totalOrders',
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <circle cx="8" cy="21" r="1" />
-        <circle cx="19" cy="21" r="1" />
-        <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Total Revenue',
-    key: 'totalRevenue',
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <circle cx="12" cy="12" r="10" />
-        <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8" />
-        <path d="M12 18V6" />
-      </svg>
-    ),
-    isCurrency: true,
-  },
-];
+import QuickStats from '../../components/dashboard/QuickStats';
+import SalesSummary from '../../components/dashboard/SalesSummary';
+import LowStockAlert from '../../components/dashboard/LowStockAlert';
+import AnalyticsChart from '../../components/dashboard/AnalyticsChart';
+import Loading from '../../components/common/Loading';
 
 const Dashboard = () => {
   const dispatch = useDispatch();
-  const [stats, setStats] = useState({
-    totalProducts: 0,
-    totalCustomers: 0,
-    totalOrders: 0,
-    totalRevenue: 0,
-  });
-  const [loading, setLoading] = useState(true);
+
+  const products = useSelector(state => state.products.products);
+  const customers = useSelector(state => state.customers.customers);
+  const sales = useSelector(state => state.sales.items);
+  const analytics = useSelector(state => state.sales.analytics);
+
+  // CORRECTED: Use .loading property from productSlice and customerSlice
+  const productsLoading = useSelector(state => state.products.loading); //
+  const customersLoading = useSelector(state => state.customers.loading); //
+  const salesLoading = useSelector(state => state.sales.status === 'loading'); // saleSlice still uses 'status'
 
   useEffect(() => {
-    const loadStats = async () => {
-      setLoading(true);
-      try {
-        const productsRes = await getProducts();
-        const customersRes = await getCustomers();
-        const salesRes = await getSales();
-        dispatch(setProducts(productsRes.data));
-        dispatch(setCustomers(customersRes.data));
-        dispatch(setSales(salesRes.data));
-        const totalRevenue = salesRes.data.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0);
-        setStats({
-          totalProducts: productsRes.data.length,
-          totalCustomers: customersRes.data.length,
-          totalOrders: salesRes.data.length,
-          totalRevenue,
-        });
-      } catch (e) {
-        // handle error
-      } finally {
-        setLoading(false);
-      }
+    const loadAllDashboardData = async () => {
+      await Promise.allSettled([
+        dispatch(fetchProducts()),
+        dispatch(fetchCustomers()),
+        dispatch(fetchSales()),
+        dispatch(fetchSalesAnalytics('monthly')),
+        dispatch(fetchProductAnalytics()),
+      ]);
     };
-    loadStats();
+
+    // This ensures data is always loaded when Dashboard mounts or updates
+    loadAllDashboardData();
   }, [dispatch]);
 
+  // Combined loading state
+  const loading = productsLoading || customersLoading || salesLoading;
+
+  const quickStatsData = {
+    products: products?.length || 0,
+    // Access the nested 'customers' array from the customers object received from Redux state
+    customers: customers?.customers?.length || 0,
+    sales: sales?.length || 0,
+    revenue: sales?.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0) || 0,
+  };
+
+  // Ensure products is an array before filtering
+  const lowStockProducts = Array.isArray(products) ? products.filter(p => p.stock < 10) : [];
+
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
-      </div>
-    );
+    return <Loading />;
   }
 
+  // Once loading is false, check if data is empty for initial display,
+  // although QuickStats, SalesSummary, LowStockAlert already handle empty states.
+  // This helps ensure something renders if data fetching finishes but data is truly empty.
+  const hasData = products.length > 0 || customers.customers?.length > 0 || sales.length > 0;
+
+  // You might want to render a "No data available" message if hasData is false here
+  // For now, assuming sub-components handle their own empty states.
+
   return (
-    <div className="min-h-screen bg-[#F8F9FA] p-8">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-5xl font-extrabold text-[#222] tracking-tight">Dashboard</h1>
-        <div className="flex gap-2">
-          {/* Add top right icons if needed */}
-        </div>
+    <div className="space-y-10">
+      <h1 className="text-4xl font-extrabold text-gray-900 mb-8">Overview</h1>
+
+      <QuickStats stats={quickStatsData} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Ensure analytics data exists before trying to map it */}
+        {analytics.sales && Array.isArray(analytics.sales) && (
+          <AnalyticsChart
+            title="Monthly Sales Trend"
+            data={{
+              labels: analytics.sales.map(s => s.month),
+              label: 'Sales (PKR)',
+              values: analytics.sales.map(s => s.total),
+            }}
+            type="line"
+          />
+        )}
+        {analytics.products && Array.isArray(analytics.products.productPerformance) && ( // Check for productPerformance array
+          <AnalyticsChart
+            title="Top 10 Products by Revenue"
+            data={{
+              labels: analytics.products.productPerformance.map(p => p.name), // Access productPerformance
+              label: 'Revenue (PKR)',
+              values: analytics.products.productPerformance.map(p => p.revenue), // Access productPerformance
+            }}
+            type="bar"
+          />
+        )}
       </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {statCards.map(card => (
-          <div key={card.key} className="bg-white rounded-2xl shadow-lg p-8 flex items-center justify-between min-w-[300px]">
-            <div>
-              <div className="text-gray-500 text-lg mb-2">{card.label}</div>
-              <div className="text-5xl font-extrabold text-[#222]">
-                {card.isCurrency
-                  ? `PKR ${stats[card.key].toLocaleString('en-PK')}`
-                  : stats[card.key].toLocaleString('en-PK')}
-              </div>
-            </div>
-            <div>{card.icon}</div>
-          </div>
-        ))}
+        <SalesSummary sales={sales.slice(0, 5)} />
+        <LowStockAlert products={lowStockProducts} />
       </div>
     </div>
   );

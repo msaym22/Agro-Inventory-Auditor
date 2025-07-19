@@ -1,13 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchCustomers } from '../../api/customers';
-import { Link } from 'react-router-dom';
+import { fetchCustomers } from '../../api/customers'; // Ensure this is correctly imported
+import { Link, useNavigate } from 'react-router-dom';
 import CustomerList from '../../components/customers/CustomerList';
 import SearchInput from '../../components/common/SearchInput';
+import Loading from '../../components/common/Loading';
+import { Button } from '../../components/common/Button';
 
 const CustomerListPage = () => {
   const dispatch = useDispatch();
-  const { items, status, error, pagination } = useSelector(state => state.customers);
+  const navigate = useNavigate();
+  const customersState = useSelector(state => state.customers.customers); // Access the 'customers' property
+  const status = useSelector(state => state.customers.status);
+  const error = useSelector(state => state.customers.error);
+  const pagination = useSelector(state => state.customers.pagination);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -17,90 +24,93 @@ const CustomerListPage = () => {
 
   const handleSearch = (term) => {
     setSearchTerm(term);
-    setCurrentPage(1);
+    setCurrentPage(1); // Reset to first page on new search
   };
 
   const handleSelectCustomer = (customer) => {
-    // Handle customer selection if needed
+    navigate(`/customers/${customer.id}`);
+  };
+
+  const handleAddNewCustomer = () => {
+    navigate('/customers/new');
   };
 
   return (
     <div className="p-4">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Customers</h1>
-        <Link
-          to="/customers/new"
-          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+        <h1 className="text-3xl font-bold text-gray-800">Customer Management</h1>
+        <Button
+          onClick={handleAddNewCustomer}
+          variant="primary"
+          size="large"
         >
           Add New Customer
-        </Link>
+        </Button>
       </div>
 
-      <div className="bg-white p-4 rounded shadow mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <div className="w-1/3">
+      <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-100 mb-8">
+        <div className="flex justify-between items-center mb-6">
+          <div className="w-1/2">
             <SearchInput
-              placeholder="Search customers..."
+              placeholder="Search customers by name or contact..."
               onSearch={handleSearch}
+              debounceMs={500}
             />
           </div>
         </div>
 
         {status === 'loading' ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
-          </div>
+          <Loading />
         ) : error ? (
-          <div className="text-red-500 text-center py-4">{error}</div>
-        ) : items.length === 0 ? (
-          <div className="text-center py-8">
-            <p>No customers found</p>
-            <Link
-              to="/customers/new"
-              className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+          <div className="text-red-500 text-center py-8 text-lg">
+            Error: {error}
+          </div>
+        ) : customersState && customersState.customers && customersState.customers.length === 0 ? ( // Check nested customers array
+          <div className="text-center py-12 text-gray-600">
+            <p className="text-lg mb-4">No customers found.</p>
+            <Button
+              onClick={handleAddNewCustomer}
+              variant="secondary"
+              size="medium"
             >
               Add Your First Customer
-            </Link>
+            </Button>
           </div>
         ) : (
           <>
             <CustomerList
-              customers={items}
+              customers={customersState.customers || []} // Pass the nested array
               onSelect={handleSelectCustomer}
             />
 
-            <div className="flex justify-between items-center mt-4">
-              <div>
-                Showing {items.length} of {pagination.totalItems} customers
+            {pagination && pagination.totalItems > 0 && (
+              <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
+                <div className="text-gray-600 text-sm">
+                  Showing {(pagination.currentPage - 1) * pagination.itemsPerPage + 1} - {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of {pagination.totalItems} customers
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={() => setCurrentPage(prev => prev - 1)}
+                    disabled={currentPage === 1}
+                    variant="secondary"
+                    size="small"
+                  >
+                    Previous
+                  </Button>
+                  <span className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-sm">
+                    {currentPage}
+                  </span>
+                  <Button
+                    onClick={() => setCurrentPage(prev => prev + 1)}
+                    disabled={currentPage === pagination.totalPages}
+                    variant="secondary"
+                    size="small"
+                  >
+                    Next
+                  </Button>
+                </div>
               </div>
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => setCurrentPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className={`px-3 py-1 rounded ${
-                    currentPage === 1
-                      ? 'bg-gray-200 cursor-not-allowed'
-                      : 'bg-gray-200 hover:bg-gray-300'
-                  }`}
-                >
-                  Previous
-                </button>
-                <span className="px-3 py-1 bg-green-600 text-white rounded">
-                  {currentPage}
-                </span>
-                <button
-                  onClick={() => setCurrentPage(currentPage + 1)}
-                  disabled={currentPage === pagination.totalPages}
-                  className={`px-3 py-1 rounded ${
-                    currentPage === pagination.totalPages
-                      ? 'bg-gray-200 cursor-not-allowed'
-                      : 'bg-gray-200 hover:bg-gray-300'
-                  }`}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
+            )}
           </>
         )}
       </div>

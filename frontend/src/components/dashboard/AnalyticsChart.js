@@ -11,6 +11,7 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
+import config from '../../config/config';
 
 ChartJS.register(
   CategoryScale,
@@ -23,27 +24,48 @@ ChartJS.register(
   Legend
 );
 
+const { THEME_COLORS } = config;
+
 const AnalyticsChart = ({ title, data, type = 'line' }) => {
   const options = {
     responsive: true,
+    maintainAspectRatio: false, // Allows chart to fill container
     plugins: {
       legend: {
         position: 'top',
         labels: {
-          color: '#1e293b',
+          color: THEME_COLORS.primary, // Use primary theme color for legend
           font: { size: 14, weight: 'bold' },
         },
       },
       title: {
         display: !!title,
         text: title,
-        color: '#2563eb',
-        font: { size: 20, weight: 'bold' },
+        color: THEME_COLORS.secondary, // Use secondary theme color for title
+        font: { size: 22, weight: 'bold' },
+        padding: { top: 10, bottom: 20 }
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        bodyFont: { size: 14 },
+        titleFont: { size: 16, weight: 'bold' },
+        padding: 12,
+        cornerRadius: 6,
       },
     },
     scales: {
-      x: { ticks: { color: '#64748b' } },
-      y: { ticks: { color: '#64748b' } },
+      x: {
+        ticks: { color: '#64748b', font: { size: 12 } },
+        grid: { display: false }, // Hide x-axis grid lines
+      },
+      y: {
+        ticks: { color: '#64748b', font: { size: 12 } },
+        grid: { color: '#e2e8f0', borderDash: [5, 5] }, // Light dashed y-axis grid
+      },
+    },
+    animation: {
+      duration: 1000,
+      easing: 'easeOutQuart',
     },
   };
 
@@ -53,17 +75,23 @@ const AnalyticsChart = ({ title, data, type = 'line' }) => {
       {
         label: data?.label || 'Data',
         data: data?.values ?? [],
-        borderColor: type === 'line' ? 'rgb(53, 162, 235)' : 'rgb(75, 192, 192)',
-        backgroundColor: type === 'bar' ? 'rgba(75, 192, 192, 0.5)' : 'rgba(53, 162, 235, 0.2)',
-        pointBackgroundColor: 'rgb(53, 162, 235)',
-        pointRadius: 5,
-        tension: 0.4,
+        borderColor: type === 'line' ? THEME_COLORS.info : THEME_COLORS.primary, // Info for line, primary for bar
+        backgroundColor: type === 'bar' ? `${THEME_COLORS.primary}B3` : `${THEME_COLORS.info}33`, // Primary with opacity for bar, info with opacity for line
+        pointBackgroundColor: THEME_COLORS.info,
+        pointBorderColor: '#fff',
+        pointHoverBackgroundColor: '#fff',
+        pointHoverBorderColor: THEME_COLORS.info,
+        pointRadius: type === 'line' ? 5 : 0,
+        pointHoverRadius: type === 'line' ? 7 : 0,
+        tension: type === 'line' ? 0.4 : 0, // Smooth curves for line chart
+        borderWidth: 2,
+        fill: type === 'line' ? true : false,
       },
     ],
   };
 
   return (
-    <div className="backdrop-blur-lg bg-gradient-to-br from-blue-100 via-white to-green-100 p-8 rounded-2xl shadow-2xl border border-white/30 mb-6">
+    <div className="backdrop-blur-lg bg-white p-8 rounded-2xl shadow-2xl border border-gray-100 h-96">
       {type === 'line' ? (
         <Line options={options} data={chartData} />
       ) : (

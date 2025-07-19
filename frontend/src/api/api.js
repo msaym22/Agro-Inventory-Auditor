@@ -1,36 +1,9 @@
-//import axios from 'axios';
-//import { store } from '../app/store';
-//
-//const api = axios.create({
-//  baseURL: 'http://localhost:5000', // Backend port
-//  withCredentials: true,
-//});
-//
-//API.interceptors.request.use((config) => {
-//  const token = store.getState().auth.token;
-//  if (token) {
-//    config.headers.Authorization = `Bearer ${token}`;
-//  }
-//  return config;
-//});
-//
-//API.interceptors.response.use(
-//  (response) => response,
-//  (error) => {
-//    if (error.response && error.response.status === 401) {
-//      // Handle unauthorized access
-//    }
-//    return Promise.reject(error);
-//  }
-//);
-//
-//export default API;
-
-
+// src/api/api.js
 import axios from 'axios';
+import config from '../config/config'; // Import the config
 
 const API = axios.create({
-  baseURL: 'http://localhost:5000',
+  baseURL: config.API_URL, // Use the API_URL from config.js
   withCredentials: true,
 });
 

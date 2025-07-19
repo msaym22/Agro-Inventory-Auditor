@@ -1,12 +1,13 @@
+// frontend/src/features/sales/saleSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import {
   getSales,
   createSale,
   getSaleById,
   generateInvoice,
-  getSalesAnalytics,
-  getProductAnalytics
 } from '../../api/sales';
+
+import * as analyticsAPI from '../../api/analytics'; // Import all functions from analyticsAPI
 
 export const fetchSales = createAsyncThunk(
   'sales/fetchSales',
@@ -50,20 +51,23 @@ export const fetchInvoice = createAsyncThunk(
     try {
       const response = await generateInvoice(id);
       return response.data;
-    } catch (err) {
+    }
+    catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to generate invoice');
     }
   }
 );
 
+// Corrected: Call analyticsAPI.getSalesAnalytics which is exported
 export const fetchSalesAnalytics = createAsyncThunk(
   'sales/fetchSalesAnalytics',
   async (period, { rejectWithValue }) => {
     try {
-      const response = await getSalesAnalytics(period);
+      // Corrected: Call analyticsAPI.getSalesAnalytics which is exported
+      const response = await analyticsAPI.getSalesAnalytics(period);
       return response.data;
     } catch (err) {
-      return rejectWithValue(err.response?.data || 'Failed to fetch analytics');
+      return rejectWithValue(err.response?.data || 'Failed to fetch sales analytics');
     }
   }
 );
@@ -72,13 +76,15 @@ export const fetchProductAnalytics = createAsyncThunk(
   'sales/fetchProductAnalytics',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await getProductAnalytics();
+      // This call to getProductAnalytics is already correct based on analyticsAPI export
+      const response = await analyticsAPI.getProductAnalytics();
       return response.data;
     } catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to fetch product analytics');
     }
   }
 );
+
 
 const saleSlice = createSlice({
   name: 'sales',

@@ -6,6 +6,7 @@ export const fetchProducts = createAsyncThunk(
   'products/fetchProducts',
   async (params = {}) => {
     const response = await getProducts(params);
+    // The API response is an object like { products: [...], pagination: {...} }
     return response;
   }
 );
@@ -53,10 +54,11 @@ export const searchProductsAction = createAsyncThunk(
 const productSlice = createSlice({
   name: 'products',
   initialState: {
-    products: [],
+    products: [], // This should always hold the array of products
+    pagination: {}, // Add pagination to the state
     currentProduct: null,
     searchResults: [],
-    loading: false,
+    loading: false, // Use a boolean 'loading' flag
     error: null,
   },
   reducers: {
@@ -81,7 +83,9 @@ const productSlice = createSlice({
       })
       .addCase(fetchProducts.fulfilled, (state, action) => {
         state.loading = false;
-        state.products = action.payload;
+        // CRITICAL FIX: Extract the 'products' array from the payload
+        state.products = action.payload.products;
+        state.pagination = action.payload.pagination; // Store pagination data
       })
       .addCase(fetchProducts.rejected, (state, action) => {
         state.loading = false;
@@ -105,6 +109,7 @@ const productSlice = createSlice({
       })
       .addCase(addNewProduct.fulfilled, (state, action) => {
         state.loading = false;
+        // Assuming addNewProduct returns the new product directly
         state.products.push(action.payload);
       })
       .addCase(addNewProduct.rejected, (state, action) => {
@@ -121,7 +126,9 @@ const productSlice = createSlice({
         state.products = state.products.filter(p => p.id !== action.payload);
       })
       .addCase(searchProductsAction.fulfilled, (state, action) => {
-        state.searchResults = action.payload;
+        // Assuming searchProducts also returns { products: [...], pagination: {...} }
+        state.searchResults = action.payload.products;
+        // You might also want to update state.pagination here if search affects it
       });
   },
 });

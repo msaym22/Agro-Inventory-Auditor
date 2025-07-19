@@ -57,23 +57,10 @@ export const generateInvoice = async (saleId) => {
   }
 };
 
-export const getSalesAnalytics = async (params = {}) => {
-  try {
-    const response = await api.get('/sales/analytics', { params });
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
+// Removed getSalesAnalytics and getProductAnalytics from here
+// export const getSalesAnalytics = async (params = {}) => { /* ... */ };
+// export const getProductAnalytics = async (params = {}) => { /* ... */ };
 
-export const getProductAnalytics = async (params = {}) => {
-  try {
-    const response = await api.get('/sales/product-analytics', { params });
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
 
 // Add aliases for the expected function names
 export const fetchSales = getSales;
@@ -86,8 +73,7 @@ const salesAPI = {
   updateSale,
   deleteSale,
   generateInvoice,
-  getSalesAnalytics,
-  getProductAnalytics,
+  // Removed getSalesAnalytics, getProductAnalytics from here too
 };
 
 export default salesAPI;

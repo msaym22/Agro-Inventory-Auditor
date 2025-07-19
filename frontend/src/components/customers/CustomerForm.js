@@ -1,11 +1,15 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
+import { Button } from '../common/Button'; // Import Button component
+import config from '../../config/config';
 
-const CustomerForm = ({ customer, onSubmit }) => {
+const { CURRENCY } = config;
+
+const CustomerForm = ({ customer, onSubmit, loading }) => {
   const { register, handleSubmit, formState: { errors } } = useForm({
     defaultValues: customer || {
       name: '',
-      contact: '',
+      contact: '', // Assuming contact is still the field name from backend
       address: '',
       creditLimit: 0,
       outstandingBalance: 0
@@ -13,69 +17,78 @@ const CustomerForm = ({ customer, onSubmit }) => {
   });
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div>
-        <label className="block text-sm font-medium mb-1">Full Name *</label>
+        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">Full Name <span className="text-red-500">*</span></label>
         <input
-          {...register('name', { required: 'Name is required' })}
-          className={`w-full p-2 border rounded ${errors.name ? 'border-red-500' : ''}`}
+          id="name"
+          {...register('name', { required: 'Customer name is required' })}
+          className={`w-full p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.name ? 'border-red-500' : 'border-gray-300'}`}
           placeholder="Enter customer name"
         />
         {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>}
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">Contact Number</label>
+        <label htmlFor="contact" className="block text-sm font-medium text-gray-700 mb-2">Contact Number</label>
         <input
+          id="contact"
+          type="tel"
           {...register('contact')}
-          className="w-full p-2 border rounded"
-          placeholder="Enter contact number"
+          className="w-full p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300"
+          placeholder="e.g., +923001234567 or 03001234567"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">Address</label>
+        <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">Address</label>
         <textarea
+          id="address"
           {...register('address')}
-          className="w-full p-2 border rounded"
-          rows="3"
-          placeholder="Enter address"
+          className="w-full p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300"
+          rows="4"
+          placeholder="Enter customer address"
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium mb-1">Credit Limit (PKR)</label>
+          <label htmlFor="creditLimit" className="block text-sm font-medium text-gray-700 mb-2">Credit Limit ({CURRENCY})</label>
           <input
+            id="creditLimit"
             type="number"
             step="0.01"
             min="0"
-            {...register('creditLimit')}
-            className="w-full p-2 border rounded"
+            {...register('creditLimit', { valueAsNumber: true })}
+            className="w-full p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300"
             placeholder="0.00"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">Initial Balance (PKR)</label>
+          <label htmlFor="outstandingBalance" className="block text-sm font-medium text-gray-700 mb-2">Initial Balance ({CURRENCY})</label>
           <input
+            id="outstandingBalance"
             type="number"
             step="0.01"
-            {...register('outstandingBalance')}
-            className="w-full p-2 border rounded"
+            {...register('outstandingBalance', { valueAsNumber: true })}
+            className="w-full p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300"
             placeholder="0.00"
           />
           <p className="text-xs text-gray-500 mt-1">Positive for credit, negative for advance payment</p>
         </div>
       </div>
 
-      <div className="flex justify-end">
-        <button
+      <div className="flex justify-end pt-4 border-t border-gray-200">
+        <Button
           type="submit"
-          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+          variant="primary"
+          size="large"
+          loading={loading}
+          disabled={loading}
         >
           {customer ? 'Update Customer' : 'Create Customer'}
-        </button>
+        </Button>
       </div>
     </form>
   );

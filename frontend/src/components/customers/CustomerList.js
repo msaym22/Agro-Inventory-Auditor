@@ -1,6 +1,6 @@
 import React from 'react';
 import DataTable from '../common/DataTable';
-import { formatCurrency } from '../../utils/helpers';
+import { formatCurrency } from '../../utils/helpers'; // Ensure this utility is available
 
 const CustomerList = ({ customers, onSelect }) => {
   const columns = [
@@ -10,7 +10,7 @@ const CustomerList = ({ customers, onSelect }) => {
       header: 'Balance',
       accessor: 'outstandingBalance',
       render: (customer) => (
-        <span className={customer.outstandingBalance > 0 ? 'text-red-600' : 'text-green-600'}>
+        <span className={customer.outstandingBalance > 0 ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
           {formatCurrency(customer.outstandingBalance)}
         </span>
       )

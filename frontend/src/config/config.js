@@ -8,11 +8,11 @@ export default {
   PAGE_SIZE: 20,
   BACKUP_FILE_TYPES: ['.json', '.csv', '.xlsx'],
   THEME_COLORS: {
-    primary: '#2E7D32',
-    secondary: '#1565C0',
-    danger: '#D32F2F',
-    warning: '#ED6C02',
-    success: '#2E7D32',
-    info: '#0288D1'
+    primary: '#2E7D32', // Dark Green
+    secondary: '#1976D2', // Darker Blue
+    danger: '#D32F2F',    // Red
+    warning: '#FBC02D',   // Amber
+    success: '#388E3C',   // Green
+    info: '#0288D1'       // Light Blue
   }
 };

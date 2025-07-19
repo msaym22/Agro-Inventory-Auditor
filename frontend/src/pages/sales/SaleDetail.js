@@ -1,19 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import salesAPI from '../../api/sales';
+import { formatCurrency, formatDate } from '../../utils/helpers';
+import Loading from '../../components/common/Loading';
+import InvoiceGenerator from '../../components/sales/InvoiceGenerator';
+import { Button } from '../../components/common/Button';
+import ImagePreview from '../../components/common/ImagePreview'; // Add this line
 
 export const SaleDetail = () => {
   const { id } = useParams();
   const [sale, setSale] = useState(null);
+  const [invoiceData, setInvoiceData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchSale = async () => {
       try {
-        const response = await salesAPI.getSale(id);
-        setSale(response.data);
-      } catch (error) {
-        console.error('Failed to fetch sale:', error);
+        const response = await salesAPI.getSaleById(id);
+        setSale(response);
+      } catch (err) {
+        console.error('Failed to fetch sale:', err);
+        setError('Failed to load sale details.');
       } finally {
         setLoading(false);
       }
@@ -21,8 +30,50 @@ export const SaleDetail = () => {
     fetchSale();
   }, [id]);
 
-  if (loading) return <div>Loading...</div>;
-  if (!sale) return <div>Sale not found</div>;
+  const handleGenerateInvoice = async () => {
+    setInvoiceLoading(true);
+    try {
+      const response = await salesAPI.generateInvoice(id);
+      setInvoiceData(response);
+    } catch (err) {
+      console.error('Failed to generate invoice:', err);
+      setError('Failed to generate invoice. Please try again.');
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <Loading />;
+  }
+
+  if (error) {
+    return (
+      <div className="text-red-500 text-center py-4">
+        {error}
+        <Link
+          to="/sales"
+          className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+        >
+          Back to Sales
+        </Link>
+      </div>
+    );
+  }
+
+  if (!sale) {
+    return (
+      <div className="text-center py-8">
+        <p>Sale not found</p>
+        <Link
+          to="/sales"
+          className="mt-4 inline-block px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+        >
+          Back to Sales
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-4">
@@ -82,9 +133,31 @@ export const SaleDetail = () => {
             Grand Total: PKR {sale.totalAmount.toFixed(2)}
           </p>
         </div>
+
+        {sale.receiptImage && (
+          <div className="mt-6">
+            <h2 className="text-lg font-semibold mb-2">Receipt Image</h2>
+            <ImagePreview url={`/uploads/${sale.receiptImage}`} alt="Sale Receipt" />
+          </div>
+        )}
+
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">Generate Invoice</h2>
+            <Button
+              onClick={handleGenerateInvoice}
+              variant="info"
+              size="medium"
+              loading={invoiceLoading}
+              disabled={invoiceLoading}
+            >
+              Generate Invoice
+            </Button>
+          </div>
+          {invoiceData && <InvoiceGenerator invoiceData={invoiceData} />}
+        </div>
       </div>
     </div>
   );
 };
 export default SaleDetail;
-//export { SaleDetail };
