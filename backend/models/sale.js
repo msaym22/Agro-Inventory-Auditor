@@ -1,10 +1,13 @@
 module.exports = (sequelize, DataTypes) => {
   const Sale = sequelize.define('Sale', {
-    date: {
+    saleDate: { // Changed from 'date' to 'saleDate' for clarity and consistency
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW
     },
-    totalAmount: DataTypes.FLOAT,
+    totalAmount: {
+      type: DataTypes.FLOAT,
+      allowNull: false
+    },
     discount: {
       type: DataTypes.FLOAT,
       defaultValue: 0
@@ -17,14 +20,20 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.ENUM('paid', 'pending', 'partial'),
       defaultValue: 'paid'
     },
-    items: DataTypes.JSON,
-    receiptImage: DataTypes.STRING
+    notes: DataTypes.TEXT, // Added notes field
+    receiptImage: DataTypes.STRING // For storing path to receipt image
   });
 
   Sale.associate = models => {
+    // A Sale belongs to one Customer
     Sale.belongsTo(models.Customer, {
       foreignKey: 'customerId',
       as: 'customer'
+    });
+    // A Sale has many SaleItems
+    Sale.hasMany(models.SaleItem, {
+      foreignKey: 'saleId',
+      as: 'items' // 'items' will now refer to associated SaleItem records
     });
   };
 

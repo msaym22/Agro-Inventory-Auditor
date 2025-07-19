@@ -1,4 +1,4 @@
-// frontend/src/features/sales/saleSlice.js
+// src/features/sales/saleSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import {
   getSales,
@@ -7,15 +7,17 @@ import {
   generateInvoice,
 } from '../../api/sales';
 
-import * as analyticsAPI from '../../api/analytics'; // Import all functions from analyticsAPI
+import * as analyticsAPI from '../../api/analytics';
 
 export const fetchSales = createAsyncThunk(
   'sales/fetchSales',
   async (params, { rejectWithValue }) => {
     try {
       const response = await getSales(params);
-      return response.data;
+      console.log('API getSales response.data:', response.data); // DEBUG LOG: Log .data
+      return response.data; // CORRECTED: Return only .data
     } catch (err) {
+      console.error('Error in fetchSales thunk:', err.response?.data || err.message);
       return rejectWithValue(err.response?.data || 'Failed to fetch sales');
     }
   }
@@ -26,7 +28,7 @@ export const addNewSale = createAsyncThunk(
   async (saleData, { rejectWithValue }) => {
     try {
       const response = await createSale(saleData);
-      return response.data;
+      return response.data; // CORRECTED: Return only .data
     } catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to create sale');
     }
@@ -38,7 +40,7 @@ export const fetchSaleById = createAsyncThunk(
   async (id, { rejectWithValue }) => {
     try {
       const response = await getSaleById(id);
-      return response.data;
+      return response.data; // CORRECTED: Return only .data
     } catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to fetch sale');
     }
@@ -50,7 +52,7 @@ export const fetchInvoice = createAsyncThunk(
   async (id, { rejectWithValue }) => {
     try {
       const response = await generateInvoice(id);
-      return response.data;
+      return response.data; // CORRECTED: Return only .data
     }
     catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to generate invoice');
@@ -58,14 +60,12 @@ export const fetchInvoice = createAsyncThunk(
   }
 );
 
-// Corrected: Call analyticsAPI.getSalesAnalytics which is exported
 export const fetchSalesAnalytics = createAsyncThunk(
   'sales/fetchSalesAnalytics',
   async (period, { rejectWithValue }) => {
     try {
-      // Corrected: Call analyticsAPI.getSalesAnalytics which is exported
       const response = await analyticsAPI.getSalesAnalytics(period);
-      return response.data;
+      return response.data; // CORRECTED: Return only .data
     } catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to fetch sales analytics');
     }
@@ -76,9 +76,8 @@ export const fetchProductAnalytics = createAsyncThunk(
   'sales/fetchProductAnalytics',
   async (_, { rejectWithValue }) => {
     try {
-      // This call to getProductAnalytics is already correct based on analyticsAPI export
       const response = await analyticsAPI.getProductAnalytics();
-      return response.data;
+      return response.data; // CORRECTED: Return only .data
     } catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to fetch product analytics');
     }
@@ -120,12 +119,20 @@ const saleSlice = createSlice({
       })
       .addCase(fetchSales.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.items = action.payload.sales;
-        state.pagination = action.payload.pagination;
+        console.log('fetchSales.fulfilled payload:', action.payload);
+        if (action.payload && Array.isArray(action.payload.sales) && action.payload.pagination) {
+          state.items = action.payload.sales;
+          state.pagination = action.payload.pagination;
+        } else {
+          console.error('fetchSales.fulfilled: Unexpected payload structure', action.payload);
+          state.error = 'Unexpected data structure from server.';
+          state.items = [];
+        }
       })
       .addCase(fetchSales.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload?.error || 'Failed to fetch sales';
+        state.error = action.payload?.error || action.error.message || 'Failed to fetch sales';
+        console.error('fetchSales.rejected error:', state.error);
       })
       .addCase(addNewSale.fulfilled, (state, action) => {
         state.items.unshift(action.payload);

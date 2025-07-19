@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchSales } from '../../api/sales'; // Ensure this is correctly imported
+import { fetchSales } from '../../features/sales/saleSlice'; // CORRECTED IMPORT PATH
 import { Link, useNavigate } from 'react-router-dom';
 import SaleList from '../../components/sales/SaleList';
 import SearchInput from '../../components/common/SearchInput';

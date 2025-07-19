@@ -6,7 +6,7 @@ export const fetchCustomers = createAsyncThunk(
   'customers/fetchCustomers',
   async (params = {}) => {
     const response = await getCustomers(params);
-    return response;
+    return response.data; // CORRECTED: Return only .data
   }
 );
 
@@ -14,7 +14,7 @@ export const fetchCustomerById = createAsyncThunk(
   'customers/fetchCustomerById',
   async (id) => {
     const response = await getCustomerById(id);
-    return response;
+    return response.data; // CORRECTED: Return only .data
   }
 );
 
@@ -22,7 +22,7 @@ export const addNewCustomer = createAsyncThunk(
   'customers/addNewCustomer',
   async (customerData) => {
     const response = await createCustomer(customerData);
-    return response;
+    return response.data; // CORRECTED: Return only .data
   }
 );
 
@@ -30,7 +30,7 @@ export const updateExistingCustomer = createAsyncThunk(
   'customers/updateExistingCustomer',
   async ({ id, customerData }) => {
     const response = await updateCustomer(id, customerData);
-    return response;
+    return response.data; // CORRECTED: Return only .data
   }
 );
 
@@ -38,7 +38,7 @@ export const updateCustomerBalanceAction = createAsyncThunk(
   'customers/updateCustomerBalance',
   async ({ id, balanceData }) => {
     const response = await updateCustomerBalance(id, balanceData);
-    return response;
+    return response.data; // CORRECTED: Return only .data
   }
 );
 
@@ -46,6 +46,7 @@ const customerSlice = createSlice({
   name: 'customers',
   initialState: {
     customers: [],
+    pagination: {},
     currentCustomer: null,
     loading: false,
     error: null,
@@ -69,7 +70,15 @@ const customerSlice = createSlice({
       })
       .addCase(fetchCustomers.fulfilled, (state, action) => {
         state.loading = false;
-        state.customers = action.payload;
+        // Ensure action.payload has 'customers' and 'pagination' properties
+        if (action.payload && Array.isArray(action.payload.customers) && action.payload.pagination) {
+          state.customers = action.payload.customers;
+          state.pagination = action.payload.pagination;
+        } else {
+          console.error('fetchCustomers.fulfilled: Unexpected payload structure', action.payload);
+          state.error = 'Unexpected data structure from server.';
+          state.customers = [];
+        }
       })
       .addCase(fetchCustomers.rejected, (state, action) => {
         state.loading = false;

@@ -6,8 +6,7 @@ export const fetchProducts = createAsyncThunk(
   'products/fetchProducts',
   async (params = {}) => {
     const response = await getProducts(params);
-    // The API response is an object like { products: [...], pagination: {...} }
-    return response;
+    return response.data; // CORRECTED: Return only .data
   }
 );
 
@@ -15,7 +14,7 @@ export const fetchProductById = createAsyncThunk(
   'products/fetchProductById',
   async (id) => {
     const response = await getProductById(id);
-    return response;
+    return response.data; // CORRECTED: Return only .data
   }
 );
 
@@ -23,7 +22,7 @@ export const addNewProduct = createAsyncThunk(
   'products/addNewProduct',
   async (productData) => {
     const response = await createProduct(productData);
-    return response;
+    return response.data; // CORRECTED: Return only .data
   }
 );
 
@@ -31,7 +30,7 @@ export const updateExistingProduct = createAsyncThunk(
   'products/updateExistingProduct',
   async ({ id, productData }) => {
     const response = await updateProduct(id, productData);
-    return response;
+    return response.data; // CORRECTED: Return only .data
   }
 );
 
@@ -39,7 +38,7 @@ export const removeProduct = createAsyncThunk(
   'products/removeProduct',
   async (id) => {
     await deleteProduct(id);
-    return id;
+    return id; // This already returns id, which is serializable
   }
 );
 
@@ -47,18 +46,18 @@ export const searchProductsAction = createAsyncThunk(
   'products/searchProducts',
   async (query) => {
     const response = await searchProducts(query);
-    return response;
+    return response.data; // CORRECTED: Return only .data
   }
 );
 
 const productSlice = createSlice({
   name: 'products',
   initialState: {
-    products: [], // This should always hold the array of products
-    pagination: {}, // Add pagination to the state
+    products: [],
+    pagination: {},
     currentProduct: null,
     searchResults: [],
-    loading: false, // Use a boolean 'loading' flag
+    loading: false,
     error: null,
   },
   reducers: {
@@ -83,9 +82,15 @@ const productSlice = createSlice({
       })
       .addCase(fetchProducts.fulfilled, (state, action) => {
         state.loading = false;
-        // CRITICAL FIX: Extract the 'products' array from the payload
-        state.products = action.payload.products;
-        state.pagination = action.payload.pagination; // Store pagination data
+        // Ensure action.payload has 'products' and 'pagination' properties
+        if (action.payload && Array.isArray(action.payload.products) && action.payload.pagination) {
+          state.products = action.payload.products;
+          state.pagination = action.payload.pagination;
+        } else {
+          console.error('fetchProducts.fulfilled: Unexpected payload structure', action.payload);
+          state.error = 'Unexpected data structure from server.';
+          state.products = [];
+        }
       })
       .addCase(fetchProducts.rejected, (state, action) => {
         state.loading = false;
@@ -109,7 +114,6 @@ const productSlice = createSlice({
       })
       .addCase(addNewProduct.fulfilled, (state, action) => {
         state.loading = false;
-        // Assuming addNewProduct returns the new product directly
         state.products.push(action.payload);
       })
       .addCase(addNewProduct.rejected, (state, action) => {
@@ -127,15 +131,17 @@ const productSlice = createSlice({
       })
       .addCase(searchProductsAction.fulfilled, (state, action) => {
         // Assuming searchProducts also returns { products: [...], pagination: {...} }
-        state.searchResults = action.payload.products;
-        // You might also want to update state.pagination here if search affects it
+        if (action.payload && Array.isArray(action.payload.products)) {
+          state.searchResults = action.payload.products;
+        } else {
+          console.error('searchProductsAction.fulfilled: Unexpected payload structure', action.payload);
+          state.searchResults = [];
+        }
       });
   },
 });
 
 export const { setProducts, clearError, clearSearchResults, setCurrentProduct } = productSlice.actions;
-
-// Add aliases for the expected function names
-export const addProduct = addNewProduct;
+export const addProduct = addNewProduct; // Alias
 
 export default productSlice.reducer;

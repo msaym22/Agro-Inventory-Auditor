@@ -1,8 +1,8 @@
 // src/components/common/Button.js
 import React from 'react';
-import config from '../../config/config';
-
-const { THEME_COLORS } = config;
+// No need to import config here if colors are directly defined in tailwind.config.js
+// import config from '../../config/config';
+// const { THEME_COLORS } = config; // Remove this
 
 const Button = ({
   children,
@@ -18,12 +18,13 @@ const Button = ({
   const baseStyles = 'inline-flex items-center justify-center font-medium rounded-md transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2';
 
   const variantStyles = {
-    primary: `bg-[${THEME_COLORS.primary}] text-white hover:bg-[${THEME_COLORS.success}] focus:ring-[${THEME_COLORS.primary}]`,
+    // Use standard Tailwind classes after extending theme.colors
+    primary: `bg-primary text-white hover:bg-success focus:ring-primary`,
     secondary: `bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-400`,
-    danger: `bg-[${THEME_COLORS.danger}] text-white hover:bg-red-700 focus:ring-[${THEME_COLORS.danger}]`,
-    success: `bg-[${THEME_COLORS.success}] text-white hover:bg-[${THEME_COLORS.primary}] focus:ring-[${THEME_COLORS.success}]`,
-    info: `bg-[${THEME_COLORS.info}] text-white hover:bg-cyan-600 focus:ring-[${THEME_COLORS.info}]`,
-    outline: `border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-[${THEME_COLORS.secondary}]`
+    danger: `bg-danger text-white hover:bg-red-700 focus:ring-danger`,
+    success: `bg-success text-white hover:bg-primary focus:ring-success`,
+    info: `bg-info text-white hover:bg-cyan-600 focus:ring-info`,
+    outline: `border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-secondary`
   };
 
   const sizeStyles = {

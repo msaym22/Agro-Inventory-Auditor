@@ -1,28 +1,32 @@
+// frontend/src/pages/products/NewProduct.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDispatch } from 'react-redux'; // Import useDispatch
 import ProductForm from '../../components/products/ProductForm';
 import productsAPI from '../../api/products';
-import { toast } from 'react-toastify'; // Import toast for notifications
+import { toast } from 'react-toastify';
+import { fetchProducts } from '../../features/products/productSlice'; // Import fetchProducts thunk
 
 export const NewProduct = () => {
   const [productData, setProductData] = useState({
     name: '',
     sellingPrice: 0,
-    purchasePrice: '', // Changed to empty string for initial state consistency
-    minimumPrice: '',  // Changed to empty string
+    purchasePrice: '',
+    minimumPrice: '',
     description: '',
-    applications: '', // Changed from usedIn to applications based on backend model
+    applications: '',
     category: '',
     comments: '',
-    storageLocation: '', // Changed from storageLocation to location based on backend model
-    stock: 0, // Changed from stockQuantity to stock based on backend model
+    storageLocation: '',
+    stock: 0,
     supplier: '',
-    expiryDate: '' // Changed to empty string
+    expiryDate: ''
   });
-  const [imageFile, setImageFile] = useState(null); // Changed image to imageFile for clarity
-  const [imagePreviewUrl, setImagePreviewUrl] = useState(null); // For displaying image preview
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const dispatch = useDispatch(); // Initialize useDispatch
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -32,7 +36,7 @@ export const NewProduct = () => {
     }));
   };
 
-  const handleImageChange = (file) => { // Expecting file object directly from FileUpload
+  const handleImageChange = (file) => {
     setImageFile(file);
     if (file) {
       setImagePreviewUrl(URL.createObjectURL(file));
@@ -46,7 +50,7 @@ export const NewProduct = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); // Prevent default form submission
+    e.preventDefault();
     setLoading(true);
 
     const dataToSubmit = {
@@ -60,19 +64,19 @@ export const NewProduct = () => {
 
     try {
       const formData = new FormData();
-      // Append fields from dataToSubmit
       for (const key in dataToSubmit) {
         if (dataToSubmit[key] !== null && dataToSubmit[key] !== undefined) {
           formData.append(key, dataToSubmit[key]);
         }
       }
       if (imageFile) {
-        formData.append('image', imageFile); // 'image' is the field name expected by multer
+        formData.append('image', imageFile);
       }
 
       const response = await productsAPI.createProduct(formData);
       toast.success('Product created successfully!');
-      navigate(`/products/${response.id}`); // Assuming response.id is directly available
+      dispatch(fetchProducts()); // Dispatch fetchProducts to refresh the list
+      navigate(`/products/${response.id}`);
     } catch (error) {
       console.error('Failed to create product:', error);
       toast.error('Failed to create product. Please try again.');

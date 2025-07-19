@@ -15,7 +15,7 @@ module.exports = (sequelize, DataTypes) => {
     applications: DataTypes.STRING,
     category: DataTypes.STRING,
     comments: DataTypes.TEXT,
-    location: DataTypes.STRING,
+    storageLocation: DataTypes.STRING, // Changed from 'location' to 'storageLocation' for consistency
     sku: {
       type: DataTypes.STRING,
       unique: true
@@ -45,6 +45,11 @@ module.exports = (sequelize, DataTypes) => {
       through: 'ProductAlternatives',
       foreignKey: 'productId',
       otherKey: 'alternativeId'
+    });
+    // A Product can be part of many SaleItems
+    Product.hasMany(models.SaleItem, {
+      foreignKey: 'productId',
+      as: 'saleItems' // Or 'itemsSold'
     });
   };
 

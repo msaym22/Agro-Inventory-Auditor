@@ -12,7 +12,8 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 0
     },
     lastPurchase: DataTypes.DATE,
-    digikhataId: DataTypes.STRING
+    digikhataId: DataTypes.STRING,
+    customerImage: DataTypes.STRING // Added for customer receipt/profile image
   });
 
   Customer.associate = models => {

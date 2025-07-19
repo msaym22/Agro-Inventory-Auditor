@@ -1,3 +1,4 @@
+// frontend/src/components/common/RichTextEditor.js
 import React, { useState, useEffect } from 'react';
 import { EditorState, convertToRaw, ContentState } from 'draft-js';
 import { Editor } from 'react-draft-wysiwyg';
@@ -39,6 +40,12 @@ const RichTextEditor = ({ value, onChange }) => {
           link: { inDropdown: true },
           history: { inDropdown: true },
         }}
+        // Add these props for RTL support if necessary
+        textDirection="auto" // Automatically detect text direction (recommended for mixed content)
+        // or explicitly 'rtl' if all content is expected to be RTL
+        // textDirection="rtl"
+        // You might need to add specific CSS for RTL in the editor area if auto doesn't suffice
+        // editorClassName="demo-editor-richtext" // Add a custom class and define styles in index.css
       />
     </div>
   );
