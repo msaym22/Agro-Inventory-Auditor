@@ -6,7 +6,7 @@ export const fetchProducts = createAsyncThunk(
   'products/fetchProducts',
   async (params = {}) => {
     const response = await getProducts(params);
-    return response.data; // CORRECTED: Return only .data
+    return response; // Corrected: Return the response directly
   }
 );
 
@@ -14,7 +14,7 @@ export const fetchProductById = createAsyncThunk(
   'products/fetchProductById',
   async (id) => {
     const response = await getProductById(id);
-    return response.data; // CORRECTED: Return only .data
+    return response; // Corrected: Return the response directly
   }
 );
 
@@ -22,7 +22,7 @@ export const addNewProduct = createAsyncThunk(
   'products/addNewProduct',
   async (productData) => {
     const response = await createProduct(productData);
-    return response.data; // CORRECTED: Return only .data
+    return response; // Corrected: Return the response directly
   }
 );
 
@@ -30,7 +30,7 @@ export const updateExistingProduct = createAsyncThunk(
   'products/updateExistingProduct',
   async ({ id, productData }) => {
     const response = await updateProduct(id, productData);
-    return response.data; // CORRECTED: Return only .data
+    return response; // Corrected: Return the response directly
   }
 );
 
@@ -38,7 +38,7 @@ export const removeProduct = createAsyncThunk(
   'products/removeProduct',
   async (id) => {
     await deleteProduct(id);
-    return id; // This already returns id, which is serializable
+    return id;
   }
 );
 
@@ -46,7 +46,7 @@ export const searchProductsAction = createAsyncThunk(
   'products/searchProducts',
   async (query) => {
     const response = await searchProducts(query);
-    return response.data; // CORRECTED: Return only .data
+    return response; // Corrected: Return the response directly
   }
 );
 

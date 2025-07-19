@@ -6,7 +6,7 @@ export const StockManagement = ({ product, onUpdateStock }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     onUpdateStock(product.id, adjustment);
-    setAdjustment(0);
+    setAdjustment(0); // Reset adjustment after submission
   };
 
   return (
@@ -16,18 +16,18 @@ export const StockManagement = ({ product, onUpdateStock }) => {
         <input
           type="number"
           value={adjustment}
-          onChange={(e) => setAdjustment(parseInt(e.target.value))}
+          onChange={(e) => setAdjustment(parseInt(e.target.value) || 0)} // Ensure integer or 0
           className="border rounded p-2 w-24 mr-2"
         />
         <button
           type="submit"
           className="bg-green-500 text-white px-4 py-2 rounded"
         >
-          Update
+          Update Stock
         </button>
       </form>
       <div className="mt-2">
-        <span className="font-semibold">Current Stock:</span> {product.stockQuantity}
+        <span className="font-semibold">Current Stock:</span> {product.stock} {/* Corrected: product.stock */}
       </div>
     </div>
   );

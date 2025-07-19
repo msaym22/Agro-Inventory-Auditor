@@ -5,9 +5,11 @@ import Login from '../pages/auth/Login';
 import ProductListPage from '../pages/products/ProductListPage';
 import NewProduct from '../pages/products/NewProduct';
 import ProductDetail from '../pages/products/ProductDetail';
+import EditProduct from '../pages/products/EditProduct';
 import CustomerListPage from '../pages/customers/CustomerListPage';
 import NewCustomer from '../pages/customers/NewCustomer';
 import CustomerDetail from '../pages/customers/CustomerDetail';
+import EditCustomer from '../pages/customers/EditCustomer'; // Import EditCustomer
 import SalesListPage from '../pages/sales/SalesListPage';
 import NewSale from '../pages/sales/NewSale';
 import SaleDetail from '../pages/sales/SaleDetail';
@@ -35,12 +37,14 @@ const AppRouter = () => {
           <Route index element={<PrivateRoute element={<ProductListPage />} />} />
           <Route path="new" element={<PrivateRoute element={<NewProduct />} />} />
           <Route path=":id" element={<PrivateRoute element={<ProductDetail />} />} />
+          <Route path="edit/:id" element={<PrivateRoute element={<EditProduct />} />} />
         </Route>
 
         <Route path="customers">
           <Route index element={<PrivateRoute element={<CustomerListPage />} />} />
           <Route path="new" element={<PrivateRoute element={<NewCustomer />} />} />
           <Route path=":id" element={<PrivateRoute element={<CustomerDetail />} />} />
+          <Route path="edit/:id" element={<PrivateRoute element={<EditCustomer />} />} /> {/* New: Edit Customer Route */}
         </Route>
 
         <Route path="sales">

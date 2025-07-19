@@ -1,11 +1,11 @@
 // frontend/src/pages/products/NewProduct.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux'; // Import useDispatch
+import { useDispatch } from 'react-redux';
 import ProductForm from '../../components/products/ProductForm';
 import productsAPI from '../../api/products';
 import { toast } from 'react-toastify';
-import { fetchProducts } from '../../features/products/productSlice'; // Import fetchProducts thunk
+import { fetchProducts } from '../../features/products/productSlice';
 
 export const NewProduct = () => {
   const [productData, setProductData] = useState({
@@ -26,7 +26,7 @@ export const NewProduct = () => {
   const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const dispatch = useDispatch(); // Initialize useDispatch
+  const dispatch = useDispatch();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -73,10 +73,10 @@ export const NewProduct = () => {
         formData.append('image', imageFile);
       }
 
-      const response = await productsAPI.createProduct(formData);
+      await productsAPI.createProduct(formData); // No longer need 'response' as we don't redirect to product detail
       toast.success('Product created successfully!');
       dispatch(fetchProducts()); // Dispatch fetchProducts to refresh the list
-      navigate(`/products/${response.id}`);
+      navigate('/products'); // Corrected: Redirect to the product list page
     } catch (error) {
       console.error('Failed to create product:', error);
       toast.error('Failed to create product. Please try again.');

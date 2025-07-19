@@ -26,35 +26,35 @@ export const ProductList = ({ products, onEdit, onDelete, onView }) => {
   }, [searchTerm, fuse, products]);
 
   const columns = [
-    { header: 'SKU', accessor: 'sku' },
+    { header: 'Location', accessor: 'storageLocation' }, // Changed from 'SKU' to 'Location'
     { header: 'Name', accessor: 'name' },
     { header: 'Category', accessor: 'category' },
-    { header: 'Stock', accessor: 'stock' }, // Changed to 'stock' based on backend model
+    { header: 'Stock', accessor: 'stock' },
     {
-      header: `Price (${CURRENCY})`, // Dynamically use CURRENCY
+      header: `Price (${CURRENCY})`,
       accessor: 'sellingPrice',
-      render: (product) => formatCurrency(product.sellingPrice) // Format currency
+      render: (product) => formatCurrency(product.sellingPrice)
     },
     {
       header: 'Actions',
-      render: ({ row }) => (
+      render: (row) => (
         <div className="flex space-x-3">
           <button
-            onClick={() => onView(row.original)}
+            onClick={() => onView(row)}
             className="text-blue-500 hover:text-blue-700 transition-colors"
             title="View Product"
           >
             <FaEye />
           </button>
           <button
-            onClick={() => onEdit(row.original)}
+            onClick={() => onEdit(row)}
             className="text-green-500 hover:text-green-700 transition-colors"
             title="Edit Product"
           >
             <FaEdit />
           </button>
           <button
-            onClick={() => onDelete(row.original.id)}
+            onClick={() => onDelete(row.id)}
             className="text-red-500 hover:text-red-700 transition-colors"
             title="Delete Product"
           >
@@ -97,7 +97,7 @@ export const ProductList = ({ products, onEdit, onDelete, onView }) => {
       <DataTable
         columns={columns}
         data={filteredData}
-         pagination={true} // Pagination logic needs to be handled outside DataTable for client-side filtering
+         pagination={true}
          pageSize={10}
       />
     </div>

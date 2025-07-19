@@ -1,12 +1,12 @@
 // src/features/customers/customerSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { getCustomers, getCustomerById, createCustomer, updateCustomer, updateCustomerBalance } from '../../api/customers';
+import { getCustomers, getCustomerById, createCustomer, updateCustomer, updateCustomerBalance, deleteCustomer } from '../../api/customers'; // Import deleteCustomer
 
 export const fetchCustomers = createAsyncThunk(
   'customers/fetchCustomers',
   async (params = {}) => {
     const response = await getCustomers(params);
-    return response.data; // CORRECTED: Return only .data
+    return response;
   }
 );
 
@@ -14,7 +14,7 @@ export const fetchCustomerById = createAsyncThunk(
   'customers/fetchCustomerById',
   async (id) => {
     const response = await getCustomerById(id);
-    return response.data; // CORRECTED: Return only .data
+    return response;
   }
 );
 
@@ -22,7 +22,7 @@ export const addNewCustomer = createAsyncThunk(
   'customers/addNewCustomer',
   async (customerData) => {
     const response = await createCustomer(customerData);
-    return response.data; // CORRECTED: Return only .data
+    return response;
   }
 );
 
@@ -30,7 +30,7 @@ export const updateExistingCustomer = createAsyncThunk(
   'customers/updateExistingCustomer',
   async ({ id, customerData }) => {
     const response = await updateCustomer(id, customerData);
-    return response.data; // CORRECTED: Return only .data
+    return response;
   }
 );
 
@@ -38,7 +38,15 @@ export const updateCustomerBalanceAction = createAsyncThunk(
   'customers/updateCustomerBalance',
   async ({ id, balanceData }) => {
     const response = await updateCustomerBalance(id, balanceData);
-    return response.data; // CORRECTED: Return only .data
+    return response;
+  }
+);
+
+export const removeCustomer = createAsyncThunk( // New: removeCustomer thunk
+  'customers/removeCustomer',
+  async (id) => {
+    await deleteCustomer(id); // Call the API to delete
+    return id; // Return the ID of the deleted customer
   }
 );
 
@@ -70,7 +78,6 @@ const customerSlice = createSlice({
       })
       .addCase(fetchCustomers.fulfilled, (state, action) => {
         state.loading = false;
-        // Ensure action.payload has 'customers' and 'pagination' properties
         if (action.payload && Array.isArray(action.payload.customers) && action.payload.pagination) {
           state.customers = action.payload.customers;
           state.pagination = action.payload.pagination;
@@ -119,6 +126,9 @@ const customerSlice = createSlice({
         if (index !== -1) {
           state.customers[index] = action.payload;
         }
+      })
+      .addCase(removeCustomer.fulfilled, (state, action) => { // New: Handle successful removal
+        state.customers = state.customers.filter(c => c.id !== action.payload);
       });
   },
 });

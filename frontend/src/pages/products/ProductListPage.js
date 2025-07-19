@@ -2,25 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { ProductList } from '../../components/products/ProductList';
-import Button from '../../components/common/Button';
+import { Button } from '../../components/common/Button';
 import Loading from '../../components/common/Loading';
-import { fetchProducts } from '../../features/products/productSlice'; // Import the thunk
-import { removeProduct } from '../../features/products/productSlice'; // Import removeProduct thunk
+import { fetchProducts, removeProduct } from '../../features/products/productSlice';
+import { FaBoxOpen } from 'react-icons/fa'; // Import an icon for empty state
 
 export const ProductListPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  // Get products data, loading status, and error from Redux store
   const products = useSelector((state) => state.products.products);
-  const loading = useSelector((state) => state.products.loading); // Correctly use 'loading' state
+  const loading = useSelector((state) => state.products.loading);
   const error = useSelector((state) => state.products.error);
 
   useEffect(() => {
-    // Always dispatch fetchProducts when the component mounts.
-    // This ensures the list is fresh, especially after navigating back from adding/editing a product.
     dispatch(fetchProducts());
-  }, [dispatch]); // Dependency array ensures it runs only when dispatch changes (which is usually once)
+  }, [dispatch]);
 
   const handleEdit = (product) => {
     navigate(`/products/edit/${product.id}`);
@@ -33,8 +30,8 @@ export const ProductListPage = () => {
   const handleDelete = async (productId) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
       try {
-        await dispatch(removeProduct(productId)).unwrap(); // Dispatch the removeProduct thunk and unwrap to handle errors
-        // No need to refetch here, as removeProduct updates the state directly
+        await dispatch(removeProduct(productId)).unwrap();
+        // State is updated by the removeProduct fulfilled action
       } catch (error) {
         console.error('Deletion failed:', error);
         // Optionally show a toast notification for error
@@ -46,7 +43,7 @@ export const ProductListPage = () => {
     navigate('/products/new');
   };
 
-  if (loading) return <Loading />; // Use 'loading' state
+  if (loading) return <Loading />;
   if (error) return <div className="text-red-500 text-center py-4">Error: {error}</div>;
 
   return (
@@ -58,12 +55,22 @@ export const ProductListPage = () => {
         </Button>
       </div>
 
-      <ProductList
-        products={products}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        onView={handleView}
-      />
+      {products && products.length === 0 ? (
+        <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-100 text-center py-12 text-gray-600">
+          <FaBoxOpen className="text-blue-400 text-5xl mb-4 mx-auto" />
+          <p className="text-lg mb-4">No products found.</p>
+          <Button onClick={handleCreate} variant="secondary" size="medium">
+            Add Your First Product
+          </Button>
+        </div>
+      ) : (
+        <ProductList
+          products={products}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onView={handleView}
+        />
+      )}
     </div>
   );
 };

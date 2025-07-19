@@ -1,178 +1,121 @@
-const { Customer, Sale } = require('../models');
+const { Customer } = require('../models');
 const { Op } = require('sequelize');
-const upload = require('../middleware/upload'); // Assuming upload middleware is used for customer image
-const { logAudit } = require('./auditController'); // Assuming audit logging is used
 
-const createCustomer = async (req, res) => {
-  try {
-    upload(req, res, async (err) => {
-      if (err) {
-        return res.status(400).json({ error: err.message || 'File upload failed' });
-      }
-
-      const customerData = req.body;
-
-      if (req.file) {
-        customerData.customerImage = req.file.path; // Store image path
-      }
-
-      const customer = await Customer.create(customerData);
-
-      // Log audit trail if auditController is available
-      // await logAudit('Customer', customer.id, 'create', customerData, req.user.id);
-
-      res.status(201).json(customer);
-    });
-  } catch (err) {
-    console.error('Customer creation failed:', err);
-    res.status(500).json({ error: 'Customer creation failed', details: err.message });
-  }
-};
-
-const updateCustomer = async (req, res) => {
-  try {
-    upload(req, res, async (err) => {
-      if (err) {
-        return res.status(400).json({ error: err.message || 'File upload failed' });
-      }
-
-      const customerData = req.body;
-      const oldCustomer = await Customer.findByPk(req.params.id);
-
-      if (req.file) {
-        customerData.customerImage = req.file.path;
-      }
-
-      const [updated] = await Customer.update(customerData, {
-        where: { id: req.params.id }
-      });
-
-      if (updated) {
-        const newCustomer = await Customer.findByPk(req.params.id);
-        // Log audit trail if auditController is available
-        // const changes = { old: oldCustomer.toJSON(), new: newCustomer.toJSON() };
-        // await logAudit('Customer', req.params.id, 'update', changes, req.user.id);
-        res.json(newCustomer);
-      } else {
-        res.status(404).json({ error: 'Customer not found' });
-      }
-    });
-  } catch (err) {
-    console.error('Customer update failed:', err);
-    res.status(500).json({ error: 'Update failed', details: err.message });
-  }
-};
-
-const getCustomers = async (req, res) => {
-  const { search, page = 1, limit = 20 } = req.query;
-
-  const where = {};
-
-  if (search) {
-    where[Op.or] = [
-      { name: { [Op.iLike]: `%${search}%` } },
-      { contact: { [Op.iLike]: `%${search}%` } }
-    ];
-  }
+// Get all customers with pagination and search
+exports.getCustomers = async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const search = req.query.search || '';
+  const offset = (page - 1) * limit;
 
   try {
-    const offset = (page - 1) * limit;
+    const whereClause = search ? {
+      [Op.or]: [
+        { name: { [Op.iLike]: `%${search}%` } },
+        { contact: { [Op.iLike]: `%${search}%` } },
+        { address: { [Op.iLike]: `%${search}%` } }
+      ]
+    } : {};
 
     const { count, rows } = await Customer.findAndCountAll({
-      where,
-      order: [['name', 'ASC']],
-      limit: parseInt(limit),
-      offset: offset
+      where: whereClause,
+      limit,
+      offset,
+      order: [['createdAt', 'DESC']]
     });
-
-    const totalPages = Math.ceil(count / limit);
 
     res.json({
-      customers: rows, // Array of customer objects
+      customers: rows,
       pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(count / limit),
         totalItems: count,
-        totalPages,
-        currentPage: parseInt(page),
-        itemsPerPage: parseInt(limit)
+        itemsPerPage: limit
       }
     });
-  } catch (err) {
-    console.error('Failed to fetch customers:', err);
-    res.status(500).json({ error: 'Failed to fetch customers', details: err.message });
+  } catch (error) {
+    console.error('Error fetching customers:', error);
+    res.status(500).json({ error: 'Failed to fetch customers' });
   }
 };
 
-const getCustomerById = async (req, res) => {
+// Get a single customer by ID
+exports.getCustomerById = async (req, res) => {
   try {
-    const customer = await Customer.findByPk(req.params.id, {
-      include: [{ model: Sale, as: 'purchases' }] // Include purchases if needed
+    const customer = await Customer.findByPk(req.params.id);
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+    res.json(customer);
+  } catch (error) {
+    console.error('Error fetching customer by ID:', error);
+    res.status(500).json({ error: 'Failed to fetch customer' });
+  }
+};
+
+// Create a new customer
+exports.createCustomer = async (req, res) => {
+  try {
+    const customer = await Customer.create(req.body);
+    res.status(201).json(customer);
+  } catch (error) {
+    console.error('Error creating customer:', error);
+    res.status(500).json({ error: 'Failed to create customer' });
+  }
+};
+
+// Update a customer by ID
+exports.updateCustomer = async (req, res) => {
+  try {
+    const [updatedRows] = await Customer.update(req.body, {
+      where: { id: req.params.id },
+      returning: true // Return the updated row
     });
 
-    if (customer) {
-      res.json(customer);
-    } else {
-      res.status(404).json({ error: 'Customer not found' });
+    if (updatedRows === 0) {
+      return res.status(404).json({ error: 'Customer not found' });
     }
-  } catch (err) {
-    console.error('Server error fetching customer by ID:', err);
-    res.status(500).json({ error: 'Server error', details: err.message });
+
+    const updatedCustomer = await Customer.findByPk(req.params.id); // Fetch the updated customer
+    res.json(updatedCustomer);
+  } catch (error) {
+    console.error('Error updating customer:', error);
+    res.status(500).json({ error: 'Failed to update customer' });
   }
 };
 
-const deleteCustomer = async (req, res) => {
+// Update customer balance by ID (PATCH method for partial updates)
+exports.updateCustomerBalance = async (req, res) => {
+  const { outstandingBalance } = req.body;
   try {
     const customer = await Customer.findByPk(req.params.id);
     if (!customer) {
       return res.status(404).json({ error: 'Customer not found' });
     }
 
-    const deleted = await Customer.destroy({
+    customer.outstandingBalance = outstandingBalance; // Or add/subtract as needed
+    await customer.save();
+    res.json(customer);
+  } catch (error) {
+    console.error('Error updating customer balance:', error);
+    res.status(500).json({ error: 'Failed to update customer balance' });
+  }
+};
+
+// Delete a customer by ID (NEW)
+exports.deleteCustomer = async (req, res) => {
+  try {
+    const deletedRows = await Customer.destroy({
       where: { id: req.params.id }
     });
 
-    if (deleted) {
-      // Log audit trail if auditController is available
-      // await logAudit('Customer', req.params.id, 'delete', customer.toJSON(), req.user.id);
-      res.status(204).send();
-    } else {
-      res.status(404).json({ error: 'Customer not found' });
-    }
-  } catch (err) {
-    console.error('Customer deletion failed:', err);
-    res.status(500).json({ error: 'Deletion failed', details: err.message });
-  }
-};
-
-const updateCustomerBalance = async (req, res) => {
-  const { amount, type } = req.body; // type can be 'add' or 'subtract'
-  try {
-    const customer = await Customer.findByPk(req.params.id);
-    if (!customer) {
+    if (deletedRows === 0) {
       return res.status(404).json({ error: 'Customer not found' });
     }
 
-    if (type === 'add') {
-      customer.outstandingBalance += parseFloat(amount);
-    } else if (type === 'subtract') {
-      customer.outstandingBalance -= parseFloat(amount);
-    } else {
-      return res.status(400).json({ error: 'Invalid balance update type' });
-    }
-
-    await customer.save();
-    res.json(customer);
-  } catch (err) {
-    console.error('Failed to update customer balance:', err);
-    res.status(500).json({ error: 'Failed to update customer balance', details: err.message });
+    res.status(204).send(); // No content for successful deletion
+  } catch (error) {
+    console.error('Error deleting customer:', error);
+    res.status(500).json({ error: 'Failed to delete customer' });
   }
-};
-
-
-module.exports = {
-  createCustomer, // Ensure this is exported
-  updateCustomer,
-  getCustomers,
-  getCustomerById,
-  deleteCustomer,
-  updateCustomerBalance
 };

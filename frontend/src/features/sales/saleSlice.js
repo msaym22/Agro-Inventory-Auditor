@@ -1,4 +1,4 @@
-// src/features/sales/saleSlice.js
+// frontend/src/features/sales/saleSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import {
   getSales,
@@ -14,8 +14,8 @@ export const fetchSales = createAsyncThunk(
   async (params, { rejectWithValue }) => {
     try {
       const response = await getSales(params);
-      console.log('API getSales response.data:', response.data); // DEBUG LOG: Log .data
-      return response.data; // CORRECTED: Return only .data
+      console.log('API getSales response:', response); // Adjusted debug log
+      return response; // Corrected: Return the response directly
     } catch (err) {
       console.error('Error in fetchSales thunk:', err.response?.data || err.message);
       return rejectWithValue(err.response?.data || 'Failed to fetch sales');
@@ -28,7 +28,7 @@ export const addNewSale = createAsyncThunk(
   async (saleData, { rejectWithValue }) => {
     try {
       const response = await createSale(saleData);
-      return response.data; // CORRECTED: Return only .data
+      return response; // Corrected: Return the response directly
     } catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to create sale');
     }
@@ -40,7 +40,7 @@ export const fetchSaleById = createAsyncThunk(
   async (id, { rejectWithValue }) => {
     try {
       const response = await getSaleById(id);
-      return response.data; // CORRECTED: Return only .data
+      return response; // Corrected: Return the response directly
     } catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to fetch sale');
     }
@@ -52,7 +52,7 @@ export const fetchInvoice = createAsyncThunk(
   async (id, { rejectWithValue }) => {
     try {
       const response = await generateInvoice(id);
-      return response.data; // CORRECTED: Return only .data
+      return response; // Corrected: Return the response directly
     }
     catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to generate invoice');
@@ -65,7 +65,7 @@ export const fetchSalesAnalytics = createAsyncThunk(
   async (period, { rejectWithValue }) => {
     try {
       const response = await analyticsAPI.getSalesAnalytics(period);
-      return response.data; // CORRECTED: Return only .data
+      return response; // Corrected: Return the response directly
     } catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to fetch sales analytics');
     }
@@ -77,7 +77,7 @@ export const fetchProductAnalytics = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await analyticsAPI.getProductAnalytics();
-      return response.data; // CORRECTED: Return only .data
+      return response; // Corrected: Return the response directly
     } catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to fetch product analytics');
     }
