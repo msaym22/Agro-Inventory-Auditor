@@ -23,12 +23,10 @@ app.use(cors(corsOptions));
 // Handle preflight requests
 app.options('*', cors(corsOptions));
 
-// Body Parsing
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Cookie Parser
 app.use(cookieParser());
 
-// File Uploads
+// File Uploads - Serve static files from the 'uploads' directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // =====================
@@ -40,7 +38,10 @@ const { sequelize } = require('./models');
 sequelize.authenticate()
   .then(() => {
     console.log('Database connected successfully');
-    return sequelize.sync({ alter: true });
+    // WARNING: { force: true } will drop all existing tables and recreate them.
+    // Use this only in development or if data loss is acceptable.
+    // For permanent data storage and schema evolution without data loss, use migrations.
+    return sequelize.sync({ force: true }); // Modified to force sync for development
   })
   .then(() => {
     console.log('Database models synchronized');
@@ -58,17 +59,27 @@ const customerRoutes = require('./routes/customerRoutes');
 const saleRoutes = require('./routes/saleRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const backupRoutes = require('./routes/backupRoutes');
+const authMiddleware = require('./middleware/auth'); // Assuming this is general auth middleware
 
-// Auth routes (no middleware needed)
-app.use('/api/auth', authRoutes);
+// IMPORTANT: Place routes that use Multer (for file uploads) BEFORE express.json() and express.urlencoded()
+// Multer handles 'multipart/form-data' parsing, and if express.json/urlencoded run first, they can consume the body.
 
-// Protected routes
-const authMiddleware = require('./middleware/auth');
+// Protected routes that use Multer (e.g., product image upload, sale receipt upload)
 app.use('/api/products', authMiddleware, productRoutes);
-app.use('/api/customers', authMiddleware, customerRoutes);
 app.use('/api/sales', authMiddleware, saleRoutes);
-app.use('/api/analytics', authMiddleware, analyticsRoutes);
 app.use('/api/backup', authMiddleware, backupRoutes);
+
+// Apply generic body parsers AFTER Multer-dependent routes
+// These parsers are for 'application/json' and 'application/x-www-form-urlencoded'
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Other protected routes that primarily expect JSON or URL-encoded bodies
+app.use('/api/customers', authMiddleware, customerRoutes);
+app.use('/api/analytics', authMiddleware, analyticsRoutes);
+
+// Auth routes (typically send JSON body, so fine after global parsers)
+app.use('/api/auth', authRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

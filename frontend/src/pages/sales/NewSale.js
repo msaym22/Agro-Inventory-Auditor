@@ -1,3 +1,4 @@
+// frontend/src/pages/sales/NewSale.js
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -13,8 +14,9 @@ import config from '../../config/config';
 // Import customer and product related thunks and components
 import { fetchCustomers, addNewCustomer } from '../../features/customers/customerSlice';
 import { fetchProducts } from '../../features/products/productSlice';
-import CustomerForm from '../../components/customers/CustomerForm'; // Reusing CustomerForm
+import CustomerForm from '../../components/customers/CustomerForm';
 import SearchInput from '../../components/common/SearchInput'; // Reusing SearchInput for customer/product selection
+import InvoiceGenerator from '../../components/sales/InvoiceGenerator'; // Import for print functionality
 
 const { CURRENCY } = config;
 
@@ -30,7 +32,7 @@ const NewSale = () => {
 
   // Sale related states
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [isNewCustomer, setIsNewCustomer] = useState(false); // State to toggle new customer form
+  const [isNewCustomer, setIsNewCustomer] = useState(false);
   const [newCustomerData, setNewCustomerData] = useState({ name: '', contact: '', address: '', creditLimit: 0, outstandingBalance: 0 });
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
 
@@ -40,9 +42,12 @@ const NewSale = () => {
   const [discount, setDiscount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentStatus, setPaymentStatus] = useState('paid');
+  const [notes, setNotes] = useState(''); // Added notes state
   const [receiptImageFile, setReceiptImageFile] = useState(null);
   const [receiptImagePreviewUrl, setReceiptImagePreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false); // For sale submission
+  const [showPrintPrompt, setShowPrintPrompt] = useState(false); // New state for print prompt
+  const [newlyCreatedSaleId, setNewlyCreatedSaleId] = useState(null); // To store sale ID for printing
 
   // Fetch customers and products on component mount
   useEffect(() => {
@@ -50,22 +55,10 @@ const NewSale = () => {
     dispatch(fetchProducts());
   }, [dispatch]);
 
-  // Filter customers based on search term
-  const filteredCustomers = customers.filter(customer =>
-    customer.name.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
-    customer.contact.toLowerCase().includes(customerSearchTerm.toLowerCase())
-  );
-
-  // Filter products based on search term
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
-    product.sku.toLowerCase().includes(productSearchTerm.toLowerCase())
-  );
-
   const handleCustomerSelect = (customer) => {
     setSelectedCustomer(customer);
-    setCustomerSearchTerm(customer.name); // Set search term to selected customer's name
-    setIsNewCustomer(false); // Ensure new customer form is hidden
+    setCustomerSearchTerm(customer ? customer.name : '');
+    setIsNewCustomer(false);
   };
 
   const handleNewCustomerChange = (e) => {
@@ -73,14 +66,15 @@ const NewSale = () => {
     setNewCustomerData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleNewCustomerSubmit = async (data) => {
-    setLoading(true); // Use a separate loading for customer creation if needed, or combined
+  const handleNewCustomerFormSubmit = async (data) => {
+    setLoading(true);
     try {
       const createdCustomer = await dispatch(addNewCustomer(data)).unwrap();
       toast.success('New customer created!');
       setSelectedCustomer(createdCustomer);
-      setIsNewCustomer(false); // Hide new customer form
-      setNewCustomerData({ name: '', contact: '', address: '', creditLimit: 0, outstandingBalance: 0 }); // Reset form
+      setIsNewCustomer(false);
+      setNewCustomerData({ name: '', contact: '', address: '', creditLimit: 0, outstandingBalance: 0 });
+      setCustomerSearchTerm(createdCustomer.name); // Set search term to new customer's name
     } catch (error) {
       console.error('Failed to create new customer:', error);
       toast.error('Failed to create new customer. Please try again.');
@@ -93,12 +87,20 @@ const NewSale = () => {
     const existingItemIndex = saleItems.findIndex(item => item.productId === product.id);
 
     if (existingItemIndex > -1) {
-      setSaleItems(prev => prev.map((item, index) =>
-        index === existingItemIndex
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
-      ));
+      // If product already in cart, increment quantity, but not more than stock
+      setSaleItems(prev => prev.map((item, index) => {
+        if (index === existingItemIndex) {
+          const newQuantity = item.quantity + 1;
+          if (newQuantity > item.stock) {
+            toast.warn(`Cannot add more than ${item.stock} for ${item.name}.`);
+            return { ...item, quantity: item.stock };
+          }
+          return { ...item, quantity: newQuantity };
+        }
+        return item;
+      }));
     } else {
+      // Add new product to cart
       setSaleItems([
         ...saleItems,
         {
@@ -106,7 +108,7 @@ const NewSale = () => {
           name: product.name,
           price: product.sellingPrice,
           quantity: 1,
-          stock: product.stock,
+          stock: product.stock, // Keep track of original stock for validation
         }
       ]);
     }
@@ -124,6 +126,7 @@ const NewSale = () => {
     setSaleItems(prev =>
       prev.map(item => {
         if (item.productId === productId) {
+          // Ensure quantity does not exceed available stock
           if (quantity > item.stock) {
             toast.warn(`Cannot add more than ${item.stock} for ${item.name}.`);
             return { ...item, quantity: item.stock };
@@ -156,8 +159,8 @@ const NewSale = () => {
 
     let customerIdToUse = selectedCustomer?.id;
 
-    // If it's a new customer, ensure it's created first
-    if (isNewCustomer) {
+    // If it's a new customer and form is filled, create customer first
+    if (isNewCustomer && newCustomerData.name) {
       if (!newCustomerData.name) {
         toast.error('New customer name is required.');
         return;
@@ -175,9 +178,7 @@ const NewSale = () => {
       } finally {
         setLoading(false);
       }
-    }
-
-    if (!customerIdToUse) {
+    } else if (!customerIdToUse) {
       toast.error('Please select an existing customer or create a new one.');
       return;
     }
@@ -194,17 +195,18 @@ const NewSale = () => {
       items: saleItems.map(item => ({
         productId: item.productId,
         quantity: item.quantity,
-        priceAtSale: item.price // Include priceAtSale for backend
+        priceAtSale: item.price
       })),
       discount: parseFloat(discount) || 0,
       paymentMethod: paymentMethod,
       paymentStatus: paymentStatus,
       totalAmount: calculateTotal(),
-      notes: '' // Add a notes field if needed
+      notes: notes
     };
 
     const formData = new FormData();
-    formData.append('saleData', JSON.stringify(saleData)); // Send saleData as a JSON string
+    // Append saleData as a JSON string to a field called 'saleData'
+    formData.append('saleData', JSON.stringify(saleData));
     if (receiptImageFile) {
       formData.append('receiptImage', receiptImageFile);
     }
@@ -212,13 +214,37 @@ const NewSale = () => {
     try {
       const response = await createSale(formData);
       dispatch(addSale(response));
-      toast.success('Sale recorded successfully!');
-      navigate(`/sales/${response.id}`);
+      setNewlyCreatedSaleId(response.id); // Store sale ID for print prompt
+      setShowPrintPrompt(true); // Show print prompt
+      // Optionally reset form fields here if not navigating immediately
     } catch (error) {
       console.error('Failed to record sale:', error);
       toast.error('Failed to record sale. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePrintConfirmation = (confirm) => {
+    setShowPrintPrompt(false);
+    if (confirm && newlyCreatedSaleId) {
+      navigate(`/sales/${newlyCreatedSaleId}`); // Navigate to sale detail page to print
+    } else {
+      // Optionally clear the form or navigate elsewhere if print is skipped
+      // Reset all form states
+      setSelectedCustomer(null);
+      setIsNewCustomer(false);
+      setNewCustomerData({ name: '', contact: '', address: '', creditLimit: 0, outstandingBalance: 0 });
+      setCustomerSearchTerm('');
+      setSaleItems([]);
+      setProductSearchTerm('');
+      setDiscount(0);
+      setPaymentMethod('cash');
+      setPaymentStatus('paid');
+      setNotes('');
+      setReceiptImageFile(null);
+      setReceiptImagePreviewUrl(null);
+      setNewlyCreatedSaleId(null);
     }
   };
 
@@ -238,32 +264,22 @@ const NewSale = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">Select Existing Customer</label>
               <SearchInput
                 placeholder="Search customers by name or contact..."
+                data={customers}
+                searchKeys={['name', 'contact']}
+                onSelectResult={handleCustomerSelect}
+                renderResult={(customer) => (
+                  <div>
+                    <p className="font-medium text-gray-800">{customer.name}</p>
+                    <p className="text-sm text-gray-500">{customer.contact}</p>
+                  </div>
+                )}
                 value={customerSearchTerm}
-                onChange={(e) => {
-                  setCustomerSearchTerm(e.target.value);
-                  setSelectedCustomer(null); // Clear selected customer on new search
-                }}
-                onSearch={() => {}} // Debounce handled internally by SearchInput if needed
+                onSearch={setCustomerSearchTerm} // Keep onSearch to update internal state for dropdown logic
               />
 
-              {customerSearchTerm && filteredCustomers.length > 0 && (
-                <ul className="mt-2 border border-gray-300 rounded-lg max-h-48 overflow-y-auto bg-white shadow-md">
-                  {filteredCustomers.map(customer => (
-                    <li
-                      key={customer.id}
-                      className="p-3 cursor-pointer hover:bg-gray-100 border-b border-gray-100 last:border-b-0"
-                      onClick={() => handleCustomerSelect(customer)}
-                    >
-                      <p className="font-medium text-gray-800">{customer.name}</p>
-                      <p className="text-sm text-gray-500">{customer.contact}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {customerSearchTerm && filteredCustomers.length === 0 && (
+              {customerSearchTerm && !selectedCustomer && (
                 <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200 text-yellow-800 text-center">
-                  <p className="mb-2">No customer found with that name/contact.</p>
+                  <p className="mb-2">No customer found matching "{customerSearchTerm}".</p>
                   <Button
                     type="button"
                     onClick={() => setIsNewCustomer(true)}
@@ -300,8 +316,8 @@ const NewSale = () => {
               <h3 className="text-xl font-semibold text-gray-700 mb-4">New Customer Details</h3>
               <CustomerForm
                 customer={newCustomerData}
-                onChange={handleNewCustomerChange} // Pass onChange prop for controlled inputs
-                onSubmit={handleNewCustomerSubmit} // This will be called if CustomerForm has its own submit
+                onChange={handleNewCustomerChange}
+                onSubmit={handleNewCustomerFormSubmit}
                 loading={loading}
               />
               <Button
@@ -325,27 +341,20 @@ const NewSale = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">Add Products</label>
             <SearchInput
               placeholder="Search products by name or SKU..."
+              data={products}
+              searchKeys={['name', 'sku']}
+              onSelectResult={addProductToSale}
+              renderResult={(product) => (
+                <div>
+                  <p className="font-medium text-gray-800">{product.name} ({product.sku})</p>
+                  <p className="text-sm text-gray-500">{CURRENCY} {product.sellingPrice.toFixed(2)} - Stock: {product.stock}</p>
+                </div>
+              )}
               value={productSearchTerm}
-              onChange={(e) => setProductSearchTerm(e.target.value)}
-              onSearch={() => {}} // Debounce handled internally by SearchInput if needed
+              onSearch={setProductSearchTerm} // Keep onSearch to update internal state for dropdown logic
             />
 
-            {productSearchTerm && filteredProducts.length > 0 && (
-              <ul className="mt-2 border border-gray-300 rounded-lg max-h-48 overflow-y-auto bg-white shadow-md">
-                {filteredProducts.map(product => (
-                  <li
-                    key={product.id}
-                    className="p-3 cursor-pointer hover:bg-gray-100 border-b border-gray-100 last:border-b-0"
-                    onClick={() => addProductToSale(product)}
-                  >
-                    <p className="font-medium text-gray-800">{product.name} ({product.sku})</p>
-                    <p className="text-sm text-gray-500">{CURRENCY} {product.sellingPrice.toFixed(2)} - Stock: {product.stock}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {productSearchTerm && filteredProducts.length === 0 && (
+            {productSearchTerm && !productsLoading && products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()) || p.sku.toLowerCase().includes(productSearchTerm.toLowerCase())).length === 0 && (
               <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200 text-yellow-800 text-center">
                 No product found matching "{productSearchTerm}".
               </div>
@@ -406,12 +415,24 @@ const NewSale = () => {
             <div>
               <label htmlFor="discount" className="block text-sm font-medium text-gray-700 mb-2">Discount ({CURRENCY})</label>
               <input
-                type="number"
+                type="text" // Keep as "text" to allow leading zeros visually
                 id="discount"
-                step="0.01"
-                min="0"
-                value={discount}
-                onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
+                value={discount} // Directly bind to the discount state.
+                                  // The state will hold either a number (e.g., 200) or an empty string ('').
+                                  // This prevents the 'e is not defined' error.
+                onChange={(e) => {
+                  const rawValue = e.target.value;
+                  // Allow empty string or valid number patterns (e.g., "123", "0.5", "-10", "0", "")
+                  if (rawValue === '' || /^-?\d*\.?\d*$/.test(rawValue)) {
+                    setDiscount(rawValue); // Update state with the raw string value for display
+                  }
+                }}
+                onBlur={(e) => {
+                  // On blur, parse the value to a float and ensure it's not negative.
+                  // If it's not a valid number, default to 0.
+                  const value = parseFloat(e.target.value);
+                  setDiscount(isNaN(value) || value < 0 ? 0 : value);
+                }}
                 className="w-full p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300"
                 placeholder="0.00"
               />
@@ -443,6 +464,18 @@ const NewSale = () => {
                 <option value="pending">Pending</option>
                 <option value="partial">Partial</option>
               </select>
+            </div>
+
+            <div>
+              <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+              <textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows="3"
+                className="w-full p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300"
+                placeholder="Add any specific notes for this sale..."
+              ></textarea>
             </div>
 
             <div>
@@ -479,6 +512,32 @@ const NewSale = () => {
           </Button>
         </div>
       </form>
+
+      {/* Print Bill Prompt Modal/Dialog */}
+      {showPrintPrompt && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-lg shadow-xl text-center">
+            <h3 className="text-xl font-semibold mb-4">Sale Recorded Successfully!</h3>
+            <p className="mb-6">Do you want to print the bill?</p>
+            <div className="flex justify-center space-x-4">
+              <Button
+                onClick={() => handlePrintConfirmation(true)}
+                variant="success"
+                size="medium"
+              >
+                Yes, Print Bill
+              </Button>
+              <Button
+                onClick={() => handlePrintConfirmation(false)}
+                variant="secondary"
+                size="medium"
+              >
+                No, Thank You
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

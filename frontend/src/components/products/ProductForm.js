@@ -1,3 +1,4 @@
+// frontend/src/components/products/ProductForm.js
 import React from 'react';
 import RichTextEditor from '../common/RichTextEditor'; // Import RichTextEditor
 import FileUpload from '../common/FileUpload'; // Import FileUpload
@@ -85,12 +86,12 @@ const ProductForm = ({
             </div>
 
             <div className="mb-5">
-              <label htmlFor="stockQuantity" className="block font-medium text-gray-700 mb-2">Stock Quantity</label>
+              <label htmlFor="stock" className="block font-medium text-gray-700 mb-2">Stock Quantity</label>
               <input
                 type="number"
-                id="stockQuantity"
-                name="stockQuantity"
-                value={product.stockQuantity}
+                id="stock"       // Changed from "stockQuantity" to "stock"
+                name="stock"     // Changed from "stockQuantity" to "stock"
+                value={product.stock} // Changed from "product.stockQuantity" to "product.stock"
                 onChange={onChange}
                 min="0"
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 shadow-sm"

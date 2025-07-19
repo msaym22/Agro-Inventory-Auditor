@@ -1,120 +1,123 @@
 const { Sale, Product, Customer, SaleItem } = require('../models'); // Ensure all necessary models are imported
 const { Op } = require('sequelize');
-const upload = require('../middleware/upload'); // Assuming upload middleware is needed for receiptImage
+// REMOVE THIS LINE: const upload = require('../middleware/upload'); // No longer needed here
 const moment = require('moment'); // Assuming moment is used for date handling
 
 const recordSale = async (req, res) => {
   try {
-    upload(req, res, async (err) => {
-      if (err) {
-        // Handle file upload errors
-        console.error('File upload error:', err);
-        return res.status(400).json({ error: err.message || 'File upload failed' });
+    // Multer middleware (uploadMiddleware.single('receiptImage')) from saleRoutes.js
+    // has already run by the time this function is executed.
+    // Therefore, req.body and req.file (if a file was uploaded) are already available.
+
+    const saleData = req.body; // req.body now contains fields like 'saleData' (JSON string) and others.
+
+    // If a file was uploaded by multer, its info is in req.file
+    if (req.file) {
+      saleData.receiptImage = req.file.path; // Set the path from the uploaded file
+    } else {
+      saleData.receiptImage = null; // Ensure it's null if no file was uploaded
+    }
+
+    // Parse saleData if it comes as a JSON string (common with FormData)
+    // The 'saleData' key holds the JSON string of the sale details.
+    let parsedSaleData;
+    if (typeof saleData.saleData === 'string') {
+      try {
+        parsedSaleData = JSON.parse(saleData.saleData);
+      } catch (parseError) {
+        console.error('Failed to parse sale data JSON:', parseError);
+        return res.status(400).json({ error: 'Invalid sale data format' });
+      }
+    } else {
+      // If saleData is not a string, assume it's already parsed (e.g., if application/json was used for testing)
+      parsedSaleData = saleData;
+    }
+
+
+    const { customerId, items, discount = 0, paymentMethod, paymentStatus, notes, totalAmount } = parsedSaleData; // Use parsedSaleData
+
+    // Validate customer existence
+    const customer = await Customer.findByPk(customerId);
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    // Validate products and prepare sale items
+    const productIds = items.map(item => item.productId);
+    const products = await Product.findAll({ where: { id: productIds } });
+
+    if (products.length !== items.length) {
+      return res.status(400).json({ error: 'One or more product IDs are invalid or not found' });
+    }
+
+    const saleItemsToCreate = [];
+    let calculatedTotalAmount = 0; // Recalculate total on backend for security/integrity
+
+    for (const item of items) {
+      const product = products.find(p => p.id === item.productId);
+      if (!product) {
+        return res.status(400).json({ error: `Product with ID ${item.productId} not found` });
       }
 
-      const saleData = req.body;
-
-      // If a file was uploaded, store its path
-      if (req.file) {
-        saleData.receiptImage = req.file.path;
-      }
-
-      // Parse saleData if it comes as a JSON string (common with FormData)
-      if (typeof saleData.saleData === 'string') { // Frontend sends as 'saleData' key
-        try {
-          saleData.parsed = JSON.parse(saleData.saleData);
-        } catch (parseError) {
-          console.error('Failed to parse sale data JSON:', parseError);
-          return res.status(400).json({ error: 'Invalid sale data format' });
-        }
-      } else {
-        saleData.parsed = saleData; // If not a string, use directly
-      }
-
-      const { customerId, items, discount = 0, paymentMethod, paymentStatus, notes, totalAmount } = saleData.parsed;
-
-      // Validate customer existence
-      const customer = await Customer.findByPk(customerId);
-      if (!customer) {
-        return res.status(404).json({ error: 'Customer not found' });
-      }
-
-      // Validate products and prepare sale items
-      const productIds = items.map(item => item.productId);
-      const products = await Product.findAll({ where: { id: productIds } });
-
-      if (products.length !== items.length) {
-        return res.status(400).json({ error: 'One or more product IDs are invalid or not found' });
-      }
-
-      const saleItemsToCreate = [];
-      let calculatedTotalAmount = 0; // Recalculate total on backend for security/integrity
-
-      for (const item of items) {
-        const product = products.find(p => p.id === item.productId);
-        if (!product) {
-          return res.status(400).json({ error: `Product with ID ${item.productId} not found` });
-        }
-
-        if (item.quantity > product.stock) {
-          return res.status(400).json({
-            error: `Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`
-          });
-        }
-
-        const itemPrice = product.sellingPrice; // Use selling price from product
-        calculatedTotalAmount += itemPrice * item.quantity;
-        saleItemsToCreate.push({
-          productId: item.productId,
-          quantity: item.quantity,
-          priceAtSale: itemPrice, // Record the price at the time of sale
+      if (item.quantity > product.stock) {
+        return res.status(400).json({
+          error: `Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`
         });
       }
 
-      calculatedTotalAmount -= discount; // Apply discount
-
-      // Create the sale record
-      const sale = await Sale.create({
-        customerId,
-        saleDate: new Date(), // Use current date for saleDate
-        totalAmount: calculatedTotalAmount, // Use backend calculated total
-        discount,
-        paymentMethod,
-        paymentStatus,
-        notes: notes || '', // Ensure notes is not undefined
-        receiptImage: saleData.receiptImage || null // Store receipt image path
+      const itemPrice = product.sellingPrice; // Use selling price from product
+      calculatedTotalAmount += itemPrice * item.quantity;
+      saleItemsToCreate.push({
+        productId: item.productId,
+        quantity: item.quantity,
+        priceAtSale: itemPrice, // Record the price at the time of sale
       });
+    }
 
-      // Link sale items to the newly created sale
-      const finalSaleItems = saleItemsToCreate.map(item => ({
-        ...item,
-        saleId: sale.id
-      }));
-      await SaleItem.bulkCreate(finalSaleItems);
+    calculatedTotalAmount -= discount; // Apply discount
 
-      // Update product stock
-      for (const item of items) {
-        const product = products.find(p => p.id === item.productId);
-        product.stock -= item.quantity;
-        await product.save();
-      }
-
-      // Update customer outstanding balance if payment is credit and not paid
-      if (paymentMethod === 'credit' && paymentStatus !== 'paid') {
-        customer.outstandingBalance = (customer.outstandingBalance || 0) + calculatedTotalAmount;
-        await customer.save();
-      }
-
-      // Fetch the created sale with its associations for the response
-      const createdSale = await Sale.findByPk(sale.id, {
-        include: [
-          { model: Customer, as: 'customer', attributes: ['id', 'name', 'phone', 'address', 'outstandingBalance'] },
-          { model: SaleItem, as: 'items', include: [{ model: Product, as: 'product', attributes: ['id', 'name', 'sellingPrice'] }] }
-        ]
-      });
-
-      res.status(201).json(createdSale);
+    // Create the sale record
+    const sale = await Sale.create({
+      customerId,
+      saleDate: new Date(), // Use current date for saleDate
+      totalAmount: calculatedTotalAmount, // Use backend calculated total
+      discount,
+      paymentMethod,
+      paymentStatus,
+      notes: notes || '', // Ensure notes is not undefined
+      receiptImage: saleData.receiptImage // Store receipt image path
     });
+
+    // Link sale items to the newly created sale
+    const finalSaleItems = saleItemsToCreate.map(item => ({
+      ...item,
+      saleId: sale.id
+    }));
+    await SaleItem.bulkCreate(finalSaleItems);
+
+    // Update product stock
+    for (const item of items) {
+      const product = products.find(p => p.id === item.productId);
+      product.stock -= item.quantity;
+      await product.save();
+    }
+
+    // Update customer outstanding balance if payment is credit and not paid
+    if (paymentMethod === 'credit' && paymentStatus !== 'paid') {
+      customer.outstandingBalance = (customer.outstandingBalance || 0) + calculatedTotalAmount;
+      await customer.save();
+    }
+
+    // Fetch the created sale with its associations for the response
+    const createdSale = await Sale.findByPk(sale.id, {
+      include: [
+        { model: Customer, as: 'customer', attributes: ['id', 'name', 'contact', 'address', 'outstandingBalance'] }, // Changed 'phone' to 'contact'
+        { model: SaleItem, as: 'items', include: [{ model: Product, as: 'product', attributes: ['id', 'name', 'sellingPrice'] }] }
+      ]
+    });
+
+    res.status(201).json(createdSale);
+
   } catch (err) {
     console.error('Sale recording failed:', err);
     res.status(500).json({ error: 'Sale recording failed', details: err.message });
@@ -144,7 +147,7 @@ const getSales = async (req, res) => {
     where.saleDate = {
       [Op.between]: [
         moment(startDate).startOf('day').toDate(),
-        moment(endDate).endOf('day').toDate()
+        moment(endDate).startOf('day').toDate() // Should be endOf('day') if you want to include the end date
       ]
     };
   } else if (startDate) {
