@@ -1,25 +1,19 @@
-const { Sale, Product, Customer, SaleItem } = require('../models'); // Ensure all necessary models are imported
+// backend/controllers/saleController.js
+const { Sale, Product, Customer, SaleItem } = require('../models');
 const { Op } = require('sequelize');
-// REMOVE THIS LINE: const upload = require('../middleware/upload'); // No longer needed here
-const moment = require('moment'); // Assuming moment is used for date handling
+const moment = require('moment');
 
 const recordSale = async (req, res) => {
   try {
-    // Multer middleware (uploadMiddleware.single('receiptImage')) from saleRoutes.js
-    // has already run by the time this function is executed.
-    // Therefore, req.body and req.file (if a file was uploaded) are already available.
+    console.log('Attempting to create sale...'); // Added log
+    const saleData = req.body;
 
-    const saleData = req.body; // req.body now contains fields like 'saleData' (JSON string) and others.
-
-    // If a file was uploaded by multer, its info is in req.file
     if (req.file) {
-      saleData.receiptImage = req.file.path; // Set the path from the uploaded file
+      saleData.receiptImage = req.file.path;
     } else {
-      saleData.receiptImage = null; // Ensure it's null if no file was uploaded
+      saleData.receiptImage = null;
     }
 
-    // Parse saleData if it comes as a JSON string (common with FormData)
-    // The 'saleData' key holds the JSON string of the sale details.
     let parsedSaleData;
     if (typeof saleData.saleData === 'string') {
       try {
@@ -29,12 +23,10 @@ const recordSale = async (req, res) => {
         return res.status(400).json({ error: 'Invalid sale data format' });
       }
     } else {
-      // If saleData is not a string, assume it's already parsed (e.g., if application/json was used for testing)
       parsedSaleData = saleData;
     }
 
-
-    const { customerId, items, discount = 0, paymentMethod, paymentStatus, notes, totalAmount } = parsedSaleData; // Use parsedSaleData
+    const { customerId, items, discount, paymentMethod, paymentStatus, notes } = parsedSaleData; // Get raw discount
 
     // Validate customer existence
     const customer = await Customer.findByPk(customerId);
@@ -47,7 +39,9 @@ const recordSale = async (req, res) => {
     const products = await Product.findAll({ where: { id: productIds } });
 
     if (products.length !== items.length) {
-      return res.status(400).json({ error: 'One or more product IDs are invalid or not found' });
+      const foundProductIds = new Set(products.map(p => p.id));
+      const missingProductIds = productIds.filter(id => !foundProductIds.has(id));
+      return res.status(400).json({ error: `One or more product IDs are invalid or not found: ${missingProductIds.join(', ')}` });
     }
 
     const saleItemsToCreate = [];
@@ -55,10 +49,7 @@ const recordSale = async (req, res) => {
 
     for (const item of items) {
       const product = products.find(p => p.id === item.productId);
-      if (!product) {
-        return res.status(400).json({ error: `Product with ID ${item.productId} not found` });
-      }
-
+      
       if (item.quantity > product.stock) {
         return res.status(400).json({
           error: `Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`
@@ -70,22 +61,24 @@ const recordSale = async (req, res) => {
       saleItemsToCreate.push({
         productId: item.productId,
         quantity: item.quantity,
-        priceAtSale: itemPrice, // Record the price at the time of sale
+        priceAtSale: itemPrice,
       });
     }
 
-    calculatedTotalAmount -= discount; // Apply discount
+    // CRITICAL FIX: Ensure discount is a valid number (default to 0 if NaN/null/undefined)
+    const actualDiscount = isNaN(parseFloat(discount)) ? 0 : parseFloat(discount);
+    calculatedTotalAmount -= actualDiscount; // Apply discount
 
     // Create the sale record
     const sale = await Sale.create({
       customerId,
-      saleDate: new Date(), // Use current date for saleDate
-      totalAmount: calculatedTotalAmount, // Use backend calculated total
-      discount,
+      saleDate: new Date(),
+      totalAmount: calculatedTotalAmount,
+      discount: actualDiscount, // Store the correctly parsed discount
       paymentMethod,
       paymentStatus,
-      notes: notes || '', // Ensure notes is not undefined
-      receiptImage: saleData.receiptImage // Store receipt image path
+      notes: notes || '',
+      receiptImage: saleData.receiptImage
     });
 
     // Link sale items to the newly created sale
@@ -104,35 +97,37 @@ const recordSale = async (req, res) => {
 
     // Update customer outstanding balance if payment is credit and not paid
     if (paymentMethod === 'credit' && paymentStatus !== 'paid') {
-      customer.outstandingBalance = (customer.outstandingBalance || 0) + calculatedTotalAmount;
-      await customer.save();
+      const customer = await Customer.findByPk(customerId); // Re-fetch customer to ensure latest state
+      if (customer) {
+        customer.outstandingBalance = (customer.outstandingBalance || 0) + calculatedTotalAmount;
+        await customer.save();
+      }
     }
 
     // Fetch the created sale with its associations for the response
     const createdSale = await Sale.findByPk(sale.id, {
       include: [
-        { model: Customer, as: 'customer', attributes: ['id', 'name', 'contact', 'address', 'outstandingBalance'] }, // Changed 'phone' to 'contact'
+        { model: Customer, as: 'customer', attributes: ['id', 'name', 'contact', 'address', 'outstandingBalance'] },
         { model: SaleItem, as: 'items', include: [{ model: Product, as: 'product', attributes: ['id', 'name', 'sellingPrice'] }] }
       ]
     });
 
+    console.log('Sale recorded successfully:', createdSale.id); // Added log
     res.status(201).json(createdSale);
 
   } catch (err) {
-    console.error('Sale recording failed:', err);
-    res.status(500).json({ error: 'Sale recording failed', details: err.message });
+    console.error('Error recording sale:', err); // This log should now contain the detailed error
+    res.status(500).json({ error: 'Failed to record sale', details: err.message });
   }
 };
 
 const getSales = async (req, res) => {
-  const { search, customerId, startDate, endDate, page = 1, limit = 20 } = req.query;
-
+  const { search, customerId, startDate, endDate, paymentStatus, page = 1, limit = 20 } = req.query; // Added paymentStatus
   const where = {};
   const customerWhere = {};
 
   if (search) {
-    // Search by sale ID (if numeric) or customer name
-    if (!isNaN(search) && parseInt(search).toString() === search) { // Check if search is a valid integer ID
+    if (!isNaN(search) && parseInt(search).toString() === search) {
       where.id = parseInt(search);
     } else {
       customerWhere.name = { [Op.iLike]: `%${search}%` };
@@ -145,10 +140,7 @@ const getSales = async (req, res) => {
 
   if (startDate && endDate) {
     where.saleDate = {
-      [Op.between]: [
-        moment(startDate).startOf('day').toDate(),
-        moment(endDate).startOf('day').toDate() // Should be endOf('day') if you want to include the end date
-      ]
+      [Op.between]: [moment(startDate).startOf('day').toDate(), moment(endDate).endOf('day').toDate()]
     };
   } else if (startDate) {
     where.saleDate = { [Op.gte]: moment(startDate).startOf('day').toDate() };
@@ -156,9 +148,13 @@ const getSales = async (req, res) => {
     where.saleDate = { [Op.lte]: moment(endDate).endOf('day').toDate() };
   }
 
-  try {
-    const offset = (page - 1) * limit;
+  if (paymentStatus) { // Apply paymentStatus filter
+    where.paymentStatus = paymentStatus;
+  }
 
+  const offset = (page - 1) * limit;
+
+  try {
     const { count, rows } = await Sale.findAndCountAll({
       where,
       order: [['saleDate', 'DESC']],
@@ -169,9 +165,8 @@ const getSales = async (req, res) => {
           model: Customer,
           as: 'customer',
           attributes: ['id', 'name'],
-          // Apply customer search filter only if customerWhere is not empty
           where: Object.keys(customerWhere).length > 0 ? customerWhere : undefined,
-          required: Object.keys(customerWhere).length > 0 // Make customer include required if filtering by customer name
+          required: Object.keys(customerWhere).length > 0
         },
         {
           model: SaleItem,
@@ -184,9 +179,8 @@ const getSales = async (req, res) => {
 
     const totalPages = Math.ceil(count / limit);
 
-    // CORRECTED: Ensure the response structure matches frontend expectation
     res.json({
-      sales: rows, // Array of sale objects
+      sales: rows,
       pagination: {
         totalItems: count,
         totalPages,
@@ -195,16 +189,17 @@ const getSales = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Failed to fetch sales:', err);
+    console.error('Error fetching sales:', err);
     res.status(500).json({ error: 'Failed to fetch sales', details: err.message });
   }
 };
+
 
 const getSaleById = async (req, res) => {
   try {
     const sale = await Sale.findByPk(req.params.id, {
       include: [
-        { model: Customer, as: 'customer', attributes: ['id', 'name', 'phone', 'address', 'outstandingBalance'] },
+        { model: Customer, as: 'customer', attributes: ['id', 'name', 'contact', 'address', 'outstandingBalance'] },
         {
           model: SaleItem,
           as: 'items',
@@ -226,44 +221,121 @@ const getSaleById = async (req, res) => {
 };
 
 const updateSale = async (req, res) => {
-  try {
-    const { items, ...saleData } = req.body;
+  const { customerId, totalAmount, discount, paymentMethod, paymentStatus, notes, receiptImage, items } = req.body;
+  const { id } = req.params;
 
-    const [updated] = await Sale.update(saleData, {
-      where: { id: req.params.id }
+  try {
+    const sale = await Sale.findByPk(id);
+    if (!sale) {
+      return res.status(404).json({ error: 'Sale not found' });
+    }
+
+    // Update sale details
+    await sale.update({
+      customerId: customerId || null,
+      totalAmount,
+      discount,
+      paymentMethod,
+      paymentStatus,
+      notes,
+      receiptImage,
     });
 
-    if (updated) {
-      const updatedSale = await Sale.findByPk(req.params.id, {
-        include: [
-          { model: Customer, as: 'customer', attributes: ['id', 'name'] },
-          { model: SaleItem, as: 'items', include: [{ model: Product, as: 'product', attributes: ['id', 'name'] }] }
-        ]
-      });
-      res.json(updatedSale);
-    } else {
-      res.status(404).json({ error: 'Sale not found' });
+    // Handle sale items: This is a complex part. For simplicity, we'll
+    // delete existing items and recreate. A more robust solution would
+    // compare and update/delete/create selectively.
+
+    // First, fetch old sale items to revert stock changes
+    const oldSaleItems = await SaleItem.findAll({ where: { saleId: id } });
+    for (const oldItem of oldSaleItems) {
+        const product = await Product.findByPk(oldItem.productId);
+        if (product) {
+            await product.update({ stock: product.stock + oldItem.quantity }); // Add back old stock
+        }
+        await oldItem.destroy(); // Delete old sale item
     }
+
+
+    // Recreate sale items with new data and update stock
+    if (items && items.length > 0) {
+      for (const item of items) {
+        const product = await Product.findByPk(item.productId);
+        if (!product) {
+          throw new Error(`Product with ID ${item.productId} not found for item update.`);
+        }
+        await SaleItem.create({
+          saleId: sale.id,
+          productId: item.productId,
+          quantity: item.quantity,
+          priceAtSale: item.priceAtSale,
+        });
+        await product.update({ stock: product.stock - item.quantity }); // Subtract new stock
+      }
+    }
+
+    // Update customer's outstanding balance if relevant
+    // This is also complex as it depends on changes in totalAmount, discount, and paymentStatus.
+    // For now, let's assume simple recalculation based on new sale state.
+    if (customerId) {
+        const customer = await Customer.findByPk(customerId);
+        if (customer) {
+            // Need to get the old sale's financial impact on customer before updating.
+            // For a robust system, you'd track balance changes precisely.
+            // A dedicated transaction ledger for customer balance is usually better.
+            // This part might need custom business logic based on how you track customer outstanding balances.
+        }
+    }
+
+    const updatedSale = await Sale.findByPk(id, {
+      include: [
+        { model: Customer, as: 'customer', attributes: ['id', 'name', 'contact', 'address', 'outstandingBalance'] },
+        { model: SaleItem, as: 'items', include: [{ model: Product, as: 'product' }] }
+      ]
+    });
+
+    res.json(updatedSale);
   } catch (err) {
-    console.error('Sale update failed:', err);
-    res.status(500).json({ error: 'Update failed', details: err.message });
+    console.error('Error updating sale:', err);
+    res.status(500).json({ error: 'Failed to update sale', details: err.message });
   }
 };
 
+
 const deleteSale = async (req, res) => {
+  const { id } = req.params;
   try {
-    const deleted = await Sale.destroy({
-      where: { id: req.params.id }
+    const sale = await Sale.findByPk(id, {
+      include: [{ model: SaleItem, as: 'items' }]
     });
 
-    if (deleted) {
-      res.status(204).send();
-    } else {
-      res.status(404).json({ error: 'Sale not found' });
+    if (!sale) {
+      return res.status(404).json({ error: 'Sale not found' });
     }
+
+    // Revert product stock for all items in the sale
+    if (sale.items && sale.items.length > 0) {
+      for (const item of sale.items) {
+        const product = await Product.findByPk(item.productId);
+        if (product) {
+          await product.update({ stock: product.stock + item.quantity });
+        }
+      }
+    }
+
+    // Adjust customer's outstanding balance if applicable
+    if (sale.customerId && sale.paymentStatus !== 'Paid') {
+        const customer = await Customer.findByPk(sale.customerId);
+        if (customer) {
+            const amountDue = sale.totalAmount - (sale.totalAmount * (sale.discount / 100) || 0);
+            await customer.update({ outstandingBalance: customer.outstandingBalance - amountDue });
+        }
+    }
+
+    await sale.destroy();
+    res.status(204).send(); // No content for successful deletion
   } catch (err) {
-    console.error('Sale deletion failed:', err);
-    res.status(500).json({ error: 'Deletion failed', details: err.message });
+    console.error('Error deleting sale:', err);
+    res.status(500).json({ error: 'Failed to delete sale', details: err.message });
   }
 };
 
@@ -271,11 +343,11 @@ const generateInvoice = async (req, res) => {
   try {
     const sale = await Sale.findByPk(req.params.id, {
       include: [
-        { model: Customer, as: 'customer' },
+        { model: Customer, as: 'customer', attributes: ['name', 'contact', 'address'] },
         {
           model: SaleItem,
           as: 'items',
-          include: [{ model: Product, as: 'product' }]
+          include: [{ model: Product, as: 'product', attributes: ['name', 'sellingPrice'] }]
         }
       ]
     });
@@ -285,36 +357,33 @@ const generateInvoice = async (req, res) => {
     }
 
     const invoiceData = {
-      invoiceId: `INV-${sale.id}`,
-      date: sale.saleDate,
+      saleId: sale.id,
+      saleDate: sale.saleDate,
       customerName: sale.customer ? sale.customer.name : 'Walk-in Customer',
-      customerPhone: sale.customer ? sale.customer.phone : 'N/A',
+      customerContact: sale.customer ? sale.customer.contact : 'N/A', // Changed phone to contact
       customerAddress: sale.customer ? sale.customer.address : 'N/A',
-      items: sale.items.map(item => ({
-        productName: item.product ? item.product.name : 'Unknown Product',
-        quantity: item.quantity,
-        unitPrice: item.priceAtSale,
-        total: item.quantity * item.priceAtSale
-      })),
-      subTotal: sale.totalAmount,
-      discount: sale.discount || 0,
-      grandTotal: sale.totalAmount,
-      paymentStatus: sale.paymentStatus,
+      totalAmount: sale.totalAmount,
+      discount: sale.discount,
       paymentMethod: sale.paymentMethod,
-      notes: sale.notes || 'Thank you for your business!',
-      companyName: 'Almadina Agro Vehari',
-      companyAddress: 'Vehari, Pakistan',
-      companyPhone: '+92 3XX XXXXXXX',
+      paymentStatus: sale.paymentStatus,
+      notes: sale.notes,
+      items: sale.items.map(item => ({
+        productName: item.product.name,
+        quantity: item.quantity,
+        priceAtSale: item.priceAtSale,
+        lineTotal: item.quantity * item.priceAtSale
+      })),
+      subTotal: sale.items.reduce((sum, item) => sum + (item.quantity * item.priceAtSale), 0),
+      grandTotal: sale.totalAmount,
     };
 
     res.json(invoiceData);
 
   } catch (err) {
-    console.error('Invoice generation failed:', err);
-    res.status(500).json({ error: 'Invoice generation failed', details: err.message });
+    console.error('Error generating invoice:', err);
+    res.status(500).json({ error: 'Failed to generate invoice', details: err.message });
   }
 };
-
 
 module.exports = {
   recordSale,

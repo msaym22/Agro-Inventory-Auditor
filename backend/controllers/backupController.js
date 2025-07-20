@@ -1,64 +1,104 @@
-const { backupDatabase } = require('../utils/backup');
+// backend/controllers/backupController.js
+const { backupDatabase, getBackupHistory } = require('../utils/backup');
 const fs = require('fs');
 const path = require('path');
+const upload = require('../middleware/upload'); // Ensure upload is imported for restoreBackup
 
 const createBackup = async (req, res) => {
   try {
+    console.log('Attempting to create backup...');
     const backupPath = await backupDatabase();
-    res.download(backupPath);
+    console.log('BackupDatabase function completed, path:', backupPath);
+    res.status(200).json({ message: 'Backup created successfully', path: backupPath });
   } catch (err) {
-    res.status(500).json({ error: 'Backup creation failed' });
+    console.error('Backup creation failed in controller:', err);
+    res.status(500).json({ error: 'Backup creation failed', details: err.message });
   }
 };
 
 const restoreBackup = async (req, res) => {
-  if (!req.files || !req.files.file) {
+  if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
-  const backupFile = req.files.file;
-  const backupDir = path.join(__dirname, '../../', process.env.BACKUP_DIR);
+  const backupFile = req.file;
+  const backupDir = path.join(__dirname, '../../', process.env.BACKUP_DIR || 'backups');
 
   if (!fs.existsSync(backupDir)) {
     fs.mkdirSync(backupDir, { recursive: true });
   }
 
-  const filePath = path.join(backupDir, backupFile.name);
-  await backupFile.mv(filePath);
+  const filePath = path.join(backupDir, backupFile.filename);
 
   try {
-    const backupData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const encryptedDataString = fs.readFileSync(filePath, 'utf8');
     const { decrypt } = require('../utils/encryption');
-    const decryptedData = decrypt(backupData);
-    const { products, customers, sales } = JSON.parse(decryptedData);
+    
+    const decryptedJsonString = decrypt(encryptedDataString);
+    const { products, customers, sales } = JSON.parse(decryptedJsonString);
 
     await require('../models').sequelize.sync({ force: true });
+    console.log('Database tables recreated for restore.');
 
-    await Promise.all([
-      ...products.map(p => require('../models').Product.create(p)),
-      ...customers.map(c => require('../models').Customer.create(c)),
-      ...sales.map(s => require('../models').Sale.create(s))
-    ]);
+    await require('../models').Product.bulkCreate(products);
+    await require('../models').Customer.bulkCreate(customers);
+    await require('../models').Sale.bulkCreate(sales);
+    
+    const { SaleItem } = require('../models');
+    sales.forEach(async (saleRecord) => {
+      if (saleRecord.items && saleRecord.items.length > 0) {
+        await SaleItem.bulkCreate(saleRecord.items.map(item => ({
+          ...item,
+          saleId: saleRecord.id
+        })));
+      }
+    });
 
     res.json({ message: 'Restore completed successfully' });
   } catch (err) {
-    res.status(500).json({ error: 'Restore failed' });
+    console.error('Restore failed:', err);
+    res.status(500).json({ error: 'Restore failed', details: err.message });
+  } finally {
+    if (fs.existsSync(filePath)) {
+      // fs.unlinkSync(filePath);
+    }
   }
 };
 
-const scheduleBackups = () => {
-  setInterval(async () => {
-    try {
-      await backupDatabase();
-      console.log('Scheduled backup completed');
-    } catch (err) {
-      console.error('Scheduled backup failed:', err);
+const getHistory = async (req, res) => {
+  try {
+    const history = await getBackupHistory();
+    res.json({ backups: history });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch backup history', details: err.message });
+  }
+};
+
+const downloadBackup = async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const backupDir = path.join(__dirname, '../../', process.env.BACKUP_DIR || 'backups');
+    const filePath = path.join(backupDir, filename);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Backup file not found' });
     }
-  }, 24 * 60 * 60 * 1000);
+
+    res.download(filePath, (err) => {
+      if (err) {
+        console.error('Error downloading backup:', err);
+        res.status(500).json({ error: 'Failed to download backup' });
+      }
+    });
+  } catch (err) {
+    console.error('Download backup failed:', err);
+    res.status(500).json({ error: 'Download backup failed', details: err.message });
+  }
 };
 
 module.exports = {
   createBackup,
   restoreBackup,
-  scheduleBackups
+  getHistory,
+  downloadBackup,
 };

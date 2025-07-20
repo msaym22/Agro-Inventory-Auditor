@@ -1,7 +1,14 @@
-require('dotenv').config();
+// backend/server.js
+const path = require('path'); // ADD THIS LINE if not already there
+
+// Explicitly configure dotenv with the correct path to your .env file
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+
+// DEBUG: ENCRYPTION_KEY loaded from .env: (KEEP THIS FOR DEBUGGING)
+console.log('DEBUG: ENCRYPTION_KEY loaded from .env:', process.env.ENCRYPTION_KEY); // This will show if the key is loaded
+
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
 const cookieParser = require('cookie-parser');
 
 const app = express();
@@ -38,10 +45,8 @@ const { sequelize } = require('./models');
 sequelize.authenticate()
   .then(() => {
     console.log('Database connected successfully');
-    // WARNING: { force: true } will drop all existing tables and recreate them.
-    // Use this only in development or if data loss is acceptable.
-    // For permanent data storage and schema evolution without data loss, use migrations.
-    return sequelize.sync({ force: true }); // Modified to force sync for development
+    // For permanent database storage, ensure force: true is removed for production
+    return sequelize.sync();
   })
   .then(() => {
     console.log('Database models synchronized');
@@ -59,26 +64,20 @@ const customerRoutes = require('./routes/customerRoutes');
 const saleRoutes = require('./routes/saleRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const backupRoutes = require('./routes/backupRoutes');
-const authMiddleware = require('./middleware/auth'); // Assuming this is general auth middleware
+const authMiddleware = require('./middleware/auth');
 
-// IMPORTANT: Place routes that use Multer (for file uploads) BEFORE express.json() and express.urlencoded()
-// Multer handles 'multipart/form-data' parsing, and if express.json/urlencoded run first, they can consume the body.
-
-// Protected routes that use Multer (e.g., product image upload, sale receipt upload)
+// Protected routes (middleware applied within route files or here)
 app.use('/api/products', authMiddleware, productRoutes);
 app.use('/api/sales', authMiddleware, saleRoutes);
+app.use('/api/customers', authMiddleware, customerRoutes);
+app.use('/api/analytics', authMiddleware, analyticsRoutes);
 app.use('/api/backup', authMiddleware, backupRoutes);
 
-// Apply generic body parsers AFTER Multer-dependent routes
-// These parsers are for 'application/json' and 'application/x-www-form-urlencoded'
+// Apply generic body parsers (after file upload middleware for specific routes)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Other protected routes that primarily expect JSON or URL-encoded bodies
-app.use('/api/customers', authMiddleware, customerRoutes);
-app.use('/api/analytics', authMiddleware, analyticsRoutes);
-
-// Auth routes (typically send JSON body, so fine after global parsers)
+// Auth routes
 app.use('/api/auth', authRoutes);
 
 // Health check endpoint
@@ -106,6 +105,7 @@ app.use((req, res) => {
 // Backup Scheduling
 // =====================
 try {
+  // Correctly import scheduleBackups from backend/utils/backup
   const { scheduleBackups } = require('./utils/backup');
   scheduleBackups();
 } catch (error) {

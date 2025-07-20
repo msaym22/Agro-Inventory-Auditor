@@ -1,51 +1,41 @@
 // frontend/src/components/common/RichTextEditor.js
-import React, { useState, useEffect } from 'react';
-import { EditorState, convertToRaw, ContentState } from 'draft-js';
-import { Editor } from 'react-draft-wysiwyg';
-import draftToHtml from 'draftjs-to-html';
-import htmlToDraft from 'html-to-draftjs';
-import 'react-draft-wysiwyg/dist/react-draft-wysiwyg.css';
+import React from 'react';
+import ReactQuill from 'react-quill'; // Import ReactQuill
+import 'react-quill/dist/quill.snow.css'; // Import Quill's snow theme styles
 
 const RichTextEditor = ({ value, onChange }) => {
-  const [editorState, setEditorState] = useState(EditorState.createEmpty());
-
-  useEffect(() => {
-    if (value) {
-      const contentBlock = htmlToDraft(value);
-      if (contentBlock) {
-        const contentState = ContentState.createFromBlockArray(contentBlock.contentBlocks);
-        setEditorState(EditorState.createWithContent(contentState));
-      }
-    } else {
-      setEditorState(EditorState.createEmpty());
-    }
-  }, [value]);
-
-  const onEditorStateChange = (newEditorState) => {
-    setEditorState(newEditorState);
-    const html = draftToHtml(convertToRaw(newEditorState.getCurrentContent()));
-    onChange(html);
+  // Define the toolbar options for Quill
+  const modules = {
+    toolbar: [
+      [{ 'header': [1, 2, false] }],
+      ['bold', 'italic', 'underline', 'strike', 'blockquote'],
+      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+      [{ 'indent': '-1' }, { 'indent': '+1' }],
+      ['link'], // Add link option
+      ['clean'] // Remove formatting button
+    ],
   };
+
+  // Define the formats that Quill should allow
+  const formats = [
+    'header',
+    'bold', 'italic', 'underline', 'strike', 'blockquote',
+    'list', 'bullet', 'indent',
+    'link'
+  ];
 
   return (
     <div className="border rounded">
-      <Editor
-        editorState={editorState}
-        onEditorStateChange={onEditorStateChange}
-        toolbar={{
-          options: ['inline', 'blockType', 'list', 'textAlign', 'link', 'history'],
-          inline: { inDropdown: true },
-          list: { inDropdown: true },
-          textAlign: { inDropdown: true },
-          link: { inDropdown: true },
-          history: { inDropdown: true },
-        }}
-        // Add these props for RTL support if necessary
-        textDirection="auto" // Automatically detect text direction (recommended for mixed content)
-        // or explicitly 'rtl' if all content is expected to be RTL
-        // textDirection="rtl"
-        // You might need to add specific CSS for RTL in the editor area if auto doesn't suffice
-        // editorClassName="demo-editor-richtext" // Add a custom class and define styles in index.css
+      <ReactQuill
+        theme="snow" // Use the 'snow' theme for a modern look
+        value={value}
+        onChange={onChange} // ReactQuill's onChange provides the HTML content
+        modules={modules}
+        formats={formats}
+        // Quill.js typically handles LTR text correctly by default.
+        // If you encounter RTL issues again, you might need to check Quill's documentation
+        // for specific configuration options related to text direction,
+        // but it's less common than with draft-js.
       />
     </div>
   );
