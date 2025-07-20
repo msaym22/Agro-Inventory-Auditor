@@ -4,7 +4,10 @@ const colors = require('./src/config/config').default.THEME_COLORS; // Import th
 module.exports = {
   content: [
     "./src/**/*.{js,jsx,ts,tsx}",
-    "./public/index.html"
+    "./public/index.html",
+    // EXCLUDE the fonts directory to prevent Tailwind from parsing font Base64 data
+    // Add an explicit exclusion pattern here:
+    "!./src/fonts/**/*.{js,jsx,ts,tsx}",
   ],
   theme: {
     extend: {
