@@ -1,11 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const analyticsController = require('../controllers/analyticsController');
-const authMiddleware = require('../middleware/auth');
+const auth = require('../middleware/auth');
+const {
+  getSalesAnalytics,
+  getOverallProfit, // Import new function
+  getProfitByProduct, // Import new function
+  getSalesByCustomerWithQuantity, // Import new function
+  getInventoryValuation,
+  getMonthlySalesReport,
+} = require('../controllers/analyticsController');
 
-router.get('/products', authMiddleware, analyticsController.getProductAnalytics);
-router.get('/business', authMiddleware, analyticsController.getBusinessAnalytics); // This is likely for overall business analytics or monthly sales
-router.get('/customers', authMiddleware, analyticsController.getCustomerAnalytics);
-router.get('/sales', authMiddleware, analyticsController.getBusinessAnalytics); // New: Map /analytics/sales to getBusinessAnalytics
+router.get('/sales', auth, getSalesAnalytics);
+router.get('/profit/overall', auth, getOverallProfit); // New route
+router.get('/profit/by-product', auth, getProfitByProduct); // New route
+router.get('/sales/by-customer-quantity', auth, getSalesByCustomerWithQuantity); // New route
+router.get('/inventory-valuation', auth, getInventoryValuation);
+router.get('/monthly-sales-report', auth, getMonthlySalesReport);
+
 
 module.exports = router;

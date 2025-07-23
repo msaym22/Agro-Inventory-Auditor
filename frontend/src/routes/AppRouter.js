@@ -1,63 +1,93 @@
+// frontend/src/routes/AppRouter.js
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import Dashboard from '../pages/dashboard/Dashboard';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'; // BrowserRouter is here
+import { useSelector } from 'react-redux';
+
+// Layouts
+import MainLayout from '../layouts/MainLayout';
+import DashboardLayout from '../layouts/DashboardLayout';
+
+// Auth Pages
 import Login from '../pages/auth/Login';
+
+// Dashboard Pages
+import Dashboard from '../pages/dashboard/Dashboard';
+
+// Product Pages
 import ProductListPage from '../pages/products/ProductListPage';
 import NewProduct from '../pages/products/NewProduct';
-import ProductDetail from '../pages/products/ProductDetail';
 import EditProduct from '../pages/products/EditProduct';
+import ProductDetail from '../pages/products/ProductDetail';
+
+// Customer Pages
 import CustomerListPage from '../pages/customers/CustomerListPage';
 import NewCustomer from '../pages/customers/NewCustomer';
+import EditCustomer from '../pages/customers/EditCustomer';
 import CustomerDetail from '../pages/customers/CustomerDetail';
-import EditCustomer from '../pages/customers/EditCustomer'; // Import EditCustomer
+
+// Sales Pages
 import SalesListPage from '../pages/sales/SalesListPage';
 import NewSale from '../pages/sales/NewSale';
 import SaleDetail from '../pages/sales/SaleDetail';
-import BackupRestore from '../pages/backup/BackupRestore';
-import NotFound from '../pages/404';
-import DashboardLayout from '../layouts/DashboardLayout';
-import { useSelector } from 'react-redux';
-import { selectCurrentToken } from '../features/auth/authSlice';
 
-const PrivateRoute = ({ element }) => {
-  const token = useSelector(selectCurrentToken);
-  return token ? element : <Navigate to="/login" replace />;
+// Backup & Restore Page
+import BackupRestore from '../pages/backup/BackupRestore';
+
+// Analytics Pages
+import AnalyticsLoginPage from '../pages/analytics/AnalyticsLoginPage';
+import AnalyticsPage from '../pages/analytics/AnalyticsPage';
+
+// 404 Page
+import NotFound from '../pages/404';
+
+// PrivateRoute component to protect routes
+const PrivateRoute = ({ children }) => {
+  const { isAuthenticated } = useSelector((state) => state.auth);
+  return isAuthenticated ? children : <Navigate to="/login" />;
 };
 
 const AppRouter = () => {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/dashboard" element={<Navigate to="/" replace />} />
+    // THIS IS THE ONLY BrowserRouter IN THE ENTIRE APP
+    <BrowserRouter>
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/login" element={<MainLayout><Login /></MainLayout>} />
 
-      <Route path="/" element={<DashboardLayout />}>
-        <Route index element={<PrivateRoute element={<Dashboard />} />} />
+        {/* Analytics Login (Public, but leads to protected content) */}
+        <Route path="/analytics-login" element={<MainLayout><AnalyticsLoginPage /></MainLayout>} />
 
-        <Route path="products">
-          <Route index element={<PrivateRoute element={<ProductListPage />} />} />
-          <Route path="new" element={<PrivateRoute element={<NewProduct />} />} />
-          <Route path=":id" element={<PrivateRoute element={<ProductDetail />} />} />
-          <Route path="edit/:id" element={<PrivateRoute element={<EditProduct />} />} />
+        {/* Protected Routes (require general authentication) */}
+        <Route element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+
+          <Route path="/products" element={<ProductListPage />} />
+          <Route path="/products/new" element={<NewProduct />} />
+          <Route path="/products/edit/:id" element={<EditProduct />} />
+          <Route path="/products/:id" element={<ProductDetail />} />
+
+          <Route path="/customers" element={<CustomerListPage />} />
+          <Route path="/customers/new" element={<NewCustomer />} />
+          <Route path="/customers/edit/:id" element={<EditCustomer />} />
+          <Route path="/customers/:id" element={<CustomerDetail />} />
+
+          <Route path="/sales" element={<SalesListPage />} />
+          <Route path="/sales/new" element={<NewSale />} />
+          <Route path="/sales/:id" element={<SaleDetail />} />
+
+          <Route path="/backup-restore" element={<BackupRestore />} />
+          
+          {/* Analytics Page (Protected by AnalyticsLoginPage, but also requires general auth) */}
+          {/* The actual password check for analytics is done inside AnalyticsPage/AnalyticsLoginPage */}
+          <Route path="/analytics" element={<AnalyticsPage />} /> 
+
         </Route>
 
-        <Route path="customers">
-          <Route index element={<PrivateRoute element={<CustomerListPage />} />} />
-          <Route path="new" element={<PrivateRoute element={<NewCustomer />} />} />
-          <Route path=":id" element={<PrivateRoute element={<CustomerDetail />} />} />
-          <Route path="edit/:id" element={<PrivateRoute element={<EditCustomer />} />} /> {/* New: Edit Customer Route */}
-        </Route>
-
-        <Route path="sales">
-          <Route index element={<PrivateRoute element={<SalesListPage />} />} />
-          <Route path="new" element={<PrivateRoute element={<NewSale />} />} />
-          <Route path=":id" element={<PrivateRoute element={<SaleDetail />} />} />
-        </Route>
-
-        <Route path="backup" element={<PrivateRoute element={<BackupRestore />} />} />
-      </Route>
-
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        {/* Catch-all for 404 */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </BrowserRouter>
   );
 };
 

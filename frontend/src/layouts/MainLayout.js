@@ -1,28 +1,18 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { useSelector } from 'react-redux';
-import Sidebar from '../components/common/Sidebar';
-import Header from '../components/common/Header';
+// Corrected import paths based on your clarification
+import Sidebar from '../components/dashboard/Sidebar'; // Corrected path
+import Header from '../components/dashboard/Header';   // Corrected path
 
 const MainLayout = () => {
-  const { user } = useSelector(state => state.auth);
-
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-100">
       <Sidebar />
-
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <Header user={user} />
-
-        <main className="flex-1 overflow-y-auto p-4">
-          <Outlet />
+      <div className="flex-1 flex flex-col">
+        <Header />
+        <main className="flex-1 p-4 overflow-y-auto">
+          <Outlet /> {/* Renders the child route components */}
         </main>
-
-        <footer className="bg-white py-3 px-6 border-t">
-          <p className="text-center text-gray-600 text-sm">
-            &copy; {new Date().getFullYear()} Almadina Agro Vehari. All rights reserved.
-          </p>
-        </footer>
       </div>
     </div>
   );
