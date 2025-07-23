@@ -1,186 +1,195 @@
-const { Sale, Product, Customer, SaleItem } = require('../models');
+const { Sale, SaleItem, Product, Customer } = require('../models');
 const { Op } = require('sequelize');
-const moment = require('moment');
+const moment = require('moment'); // Make sure moment is installed (npm install moment)
 
-const recordSale = async (req, res) => {
+// Create a new sale
+exports.createSale = async (req, res) => {
+  console.log("Sale creation request received. req.body:", req.body); // Log incoming request body
+  let transaction;
   try {
-    const saleData = req.body;
+    // Assuming saleData is sent as a JSON string in a 'saleData' field of FormData
+    // And receiptImage (if any) is in req.file
+    const { saleData } = req.body; 
+    const parsedSaleData = JSON.parse(saleData);
+    console.log("Parsed Sale Data:", parsedSaleData); // Log parsed data
 
-    if (req.file) {
-      saleData.receiptImage = req.file.path;
-    } else {
-      saleData.receiptImage = null;
-    }
+    const receiptImage = req.file ? req.file.path : null; // Get image path if uploaded
 
-    let parsedSaleData;
-    if (typeof saleData.saleData === 'string') {
-      try {
-        parsedSaleData = JSON.parse(saleData.saleData);
-      } catch (parseError) {
-        console.error('Failed to parse sale data JSON:', parseError);
-        return res.status(400).json({ error: 'Invalid sale data format' });
-      }
-    } else {
-      parsedSaleData = saleData;
-    }
+    transaction = await Sale.sequelize.transaction();
 
-    const { customerId, items, discount = 0, paymentMethod, paymentStatus, notes, totalAmount } = parsedSaleData;
-
-    const customer = await Customer.findByPk(customerId);
+    // Validate customer and products existence before creating sale
+    const customer = await Customer.findByPk(parsedSaleData.customerId, { transaction });
     if (!customer) {
-      return res.status(404).json({ error: 'Customer not found' });
+      throw new Error('Customer not found'); // Throw error to trigger rollback
     }
 
-    const productIds = items.map(item => item.productId);
-    const products = await Product.findAll({ where: { id: productIds } });
+    const productIds = parsedSaleData.items.map(item => item.productId);
+    const products = await Product.findAll({ where: { id: productIds }, transaction });
 
-    if (products.length !== items.length) {
-      return res.status(400).json({ error: 'One or more product IDs are invalid or not found' });
+    if (products.length !== parsedSaleData.items.length) {
+      throw new Error('One or more product IDs are invalid or not found');
     }
 
+    // Calculate total amount and prepare sale items
+    let calculatedSubTotal = 0;
     const saleItemsToCreate = [];
-    let calculatedTotalAmount = 0;
 
-    for (const item of items) {
+    for (const item of parsedSaleData.items) {
       const product = products.find(p => p.id === item.productId);
-      if (!product) {
-        return res.status(400).json({ error: `Product with ID ${item.productId} not found` });
-      }
-
+      
       if (item.quantity > product.stock) {
-        return res.status(400).json({
-          error: `Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`
-        });
+        throw new Error(`Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
       }
 
-      const itemPrice = product.sellingPrice;
-      calculatedTotalAmount += itemPrice * item.quantity;
+      const itemPrice = product.sellingPrice; // Use product's current selling price
+      calculatedSubTotal += itemPrice * item.quantity;
       saleItemsToCreate.push({
         productId: item.productId,
         quantity: item.quantity,
-        priceAtSale: itemPrice,
+        priceAtSale: itemPrice, // Record price at the time of sale
       });
     }
 
-    calculatedTotalAmount -= discount;
+    const finalTotalAmount = calculatedSubTotal - (parsedSaleData.discount || 0);
 
+    // Create the sale record
     const sale = await Sale.create({
-      customerId,
-      saleDate: new Date(),
-      totalAmount: calculatedTotalAmount,
-      discount,
-      paymentMethod,
-      paymentStatus,
-      notes: notes || '',
-      receiptImage: saleData.receiptImage
-    });
+      customerId: parsedSaleData.customerId,
+      saleDate: parsedSaleData.saleDate || new Date(), // Use provided date or current date
+      totalAmount: finalTotalAmount,
+      subTotal: calculatedSubTotal, // Store subTotal
+      discount: parsedSaleData.discount || 0,
+      paymentMethod: parsedSaleData.paymentMethod,
+      paymentStatus: parsedSaleData.paymentStatus,
+      notes: parsedSaleData.notes || '',
+      receiptImage: receiptImage,
+    }, { transaction });
 
-    const finalSaleItems = saleItemsToCreate.map(item => ({
-      ...item,
-      saleId: sale.id
-    }));
-    await SaleItem.bulkCreate(finalSaleItems);
+    // Create sale items and update product stock within the same transaction
+    for (const itemData of saleItemsToCreate) {
+      await SaleItem.create({
+        saleId: sale.id,
+        productId: itemData.productId,
+        quantity: itemData.quantity,
+        priceAtSale: itemData.priceAtSale
+      }, { transaction });
 
-    for (const item of items) {
-      const product = products.find(p => p.id === item.productId);
-      product.stock -= item.quantity;
-      await product.save();
+      // Update product stock
+      const productToUpdate = products.find(p => p.id === itemData.productId);
+      if (productToUpdate) {
+        productToUpdate.stock -= itemData.quantity;
+        await productToUpdate.save({ transaction });
+      }
     }
 
-    if (paymentMethod === 'credit' && paymentStatus !== 'paid') {
-      customer.outstandingBalance = (customer.outstandingBalance || 0) + calculatedTotalAmount;
-      await customer.save();
+    // Update customer's outstanding balance if payment method is credit and not fully paid
+    if (parsedSaleData.paymentMethod === 'credit' && parsedSaleData.paymentStatus !== 'paid') {
+      customer.outstandingBalance = (customer.outstandingBalance || 0) + finalTotalAmount;
+      await customer.save({ transaction });
     }
 
+    await transaction.commit();
+
+    // Fetch the created sale with all necessary associations for the frontend
     const createdSale = await Sale.findByPk(sale.id, {
-      include: [
-        { model: Customer, as: 'customer', attributes: ['id', 'name', 'contact', 'address', 'outstandingBalance'] },
-        { model: SaleItem, as: 'items', include: [{ model: Product, as: 'product', attributes: ['id', 'name', 'sellingPrice', 'nameUrdu'] }] } // Added 'nameUrdu'
-      ]
-    });
-
-    res.status(201).json(createdSale);
-
-  } catch (err) {
-    console.error('Sale recording failed:', err);
-    res.status(500).json({ error: 'Sale recording failed', details: err.message });
-  }
-};
-
-const getSales = async (req, res) => {
-  const { search, customerId, startDate, endDate, page = 1, limit = 20 } = req.query;
-
-  const where = {};
-  const customerWhere = {};
-
-  if (search) {
-    if (!isNaN(search) && parseInt(search).toString() === search) {
-      where.id = parseInt(search);
-    } else {
-      customerWhere.name = { [Op.iLike]: `%${search}%` };
-    }
-  }
-
-  if (customerId) {
-    where.customerId = customerId;
-  }
-
-  if (startDate && endDate) {
-    where.saleDate = {
-      [Op.between]: [
-        moment(startDate).startOf('day').toDate(),
-        moment(endDate).endOf('day').toDate()
-      ]
-    };
-  } else if (startDate) {
-    where.saleDate = { [Op.gte]: moment(startDate).startOf('day').toDate() };
-  } else if (endDate) {
-    where.saleDate = { [Op.lte]: moment(endDate).endOf('day').toDate() };
-  }
-
-  try {
-    const offset = (page - 1) * limit;
-
-    const { count, rows } = await Sale.findAndCountAll({
-      where,
-      order: [['saleDate', 'DESC']],
-      limit: parseInt(limit),
-      offset: offset,
       include: [
         {
           model: Customer,
           as: 'customer',
-          attributes: ['id', 'name'],
-          where: Object.keys(customerWhere).length > 0 ? customerWhere : undefined,
-          required: Object.keys(customerWhere).length > 0
+          attributes: ['id', 'name', 'contact', 'address', 'outstandingBalance']
         },
         {
           model: SaleItem,
           as: 'items',
-          attributes: ['quantity', 'priceAtSale'],
-          include: [{ model: Product, as: 'product', attributes: ['id', 'name', 'nameUrdu'] }] // Added 'nameUrdu'
+          include: [
+            {
+              model: Product,
+              as: 'product',
+              attributes: ['id', 'name', 'sellingPrice', 'nameUrdu']
+            }
+          ]
         }
       ]
     });
 
-    const totalPages = Math.ceil(count / limit);
+    console.log("Sale created and fetched successfully:", createdSale); // Log final response
+    res.status(201).json(createdSale);
 
-    res.json({
-      sales: rows,
-      pagination: {
-        totalItems: count,
-        totalPages,
-        currentPage: parseInt(page),
-        itemsPerPage: parseInt(limit)
-      }
-    });
-  } catch (err) {
-    console.error('Failed to fetch sales:', err);
-    res.status(500).json({ error: 'Failed to fetch sales', details: err.message });
+  } catch (error) {
+    if (transaction) await transaction.rollback(); // Rollback transaction on error
+    console.error('Error creating sale:', error); // Log full error object
+    if (error.name === 'SequelizeValidationError') {
+      return res.status(400).json({ error: 'Validation failed', details: error.errors.map(e => e.message) });
+    }
+    if (error.name === 'SequelizeForeignKeyConstraintError') {
+      return res.status(400).json({ error: 'Invalid customer or product ID due to foreign key constraint', details: error.message });
+    }
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({ error: 'Duplicate entry', details: error.message });
+    }
+    res.status(500).json({ error: 'Failed to create sale', details: error.message });
   }
 };
 
-const getSaleById = async (req, res) => {
+// Get all sales with pagination and search
+exports.getSales = async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const search = req.query.search || '';
+  const offset = (page - 1) * limit;
+
+  try {
+    const whereClause = search ? {
+      [Op.or]: [
+        { '$customer.name$': { [Op.iLike]: `%${search}%` } }, // Search by customer name
+        // Allow searching by sale ID (integer) or totalAmount (float)
+        { id: parseInt(search) || 0 }, 
+        { totalAmount: parseFloat(search) || 0 }
+      ]
+    } : {};
+
+    const { count, rows } = await Sale.findAndCountAll({
+      where: whereClause,
+      limit,
+      offset,
+      order: [['saleDate', 'DESC']],
+      include: [
+        {
+          model: Customer,
+          as: 'customer',
+          attributes: ['id', 'name', 'contact', 'address'] // Include more customer attributes if needed by frontend
+        },
+        {
+          model: SaleItem,
+          as: 'items',
+          include: [
+            {
+              model: Product,
+              as: 'product',
+              attributes: ['id', 'name', 'nameUrdu', 'sellingPrice'] // Ensure nameUrdu is included here
+            }
+          ]
+        }
+      ]
+    });
+
+    res.json({
+      sales: rows, // Ensure this is 'sales' for the frontend's fetchSales.fulfilled
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(count / limit),
+        totalItems: count,
+        itemsPerPage: limit
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching sales:', error);
+    res.status(500).json({ error: 'Failed to fetch sales', details: error.message });
+  }
+};
+
+// Get a single sale by ID
+exports.getSaleById = async (req, res) => {
   try {
     const sale = await Sale.findByPk(req.params.id, {
       include: [
@@ -205,103 +214,117 @@ const getSaleById = async (req, res) => {
   }
 };
 
-const updateSale = async (req, res) => {
-  try {
-    const { items, ...saleData } = req.body;
+// Update a sale by ID
+exports.updateSale = async (req, res) => {
+  console.log("Sale update request received. req.body:", req.body);
+  const { id } = req.params;
+  const { items, ...saleData } = req.body; // Destructure items if present
 
-    const [updated] = await Sale.update(saleData, {
-      where: { id: req.params.id }
+  let transaction;
+  try {
+    transaction = await Sale.sequelize.transaction();
+
+    const [updatedRows] = await Sale.update(saleData, {
+      where: { id },
+      transaction,
+      returning: true // Return the updated row
     });
 
-    if (updated) {
-      const updatedSale = await Sale.findByPk(req.params.id, {
-        include: [
-          { model: Customer, as: 'customer', attributes: ['id', 'name'] },
-          { model: SaleItem, as: 'items', include: [{ model: Product, as: 'product', attributes: ['id', 'name'] }] }
-        ]
-      });
-      res.json(updatedSale);
-    } else {
-      res.status(404).json({ error: 'Sale not found' });
+    if (updatedRows === 0) {
+      await transaction.rollback();
+      return res.status(404).json({ error: 'Sale not found' });
     }
+
+    // If items are provided, update them. This assumes a full replacement or specific updates.
+    // For simplicity, we might delete existing items and recreate, or compare and update.
+    // A more robust solution would handle diffing.
+    if (items && items.length > 0) {
+      await SaleItem.destroy({ where: { saleId: id }, transaction }); // Delete old items
+      for (const item of items) {
+        await SaleItem.create({
+          saleId: id,
+          productId: item.productId,
+          quantity: item.quantity,
+          priceAtSale: item.priceAtSale // Use priceAtSale from frontend
+        }, { transaction });
+
+        // Update product stock (consider previous stock vs new stock)
+        const product = await Product.findByPk(item.productId, { transaction });
+        if (product) {
+          // This is a simplified stock update. For a real system, you'd need to calculate
+          // the difference between old and new quantities for the product.
+          // For now, it assumes a fresh stock deduction.
+          product.stock -= item.quantity; 
+          await product.save({ transaction });
+        }
+      }
+    }
+
+    await transaction.commit();
+
+    const updatedSale = await Sale.findByPk(id, {
+      include: [
+        { model: Customer, as: 'customer', attributes: ['id', 'name'] },
+        { model: SaleItem, as: 'items', include: [{ model: Product, as: 'product', attributes: ['id', 'name', 'nameUrdu'] }] }
+      ]
+    });
+    console.log("Sale updated successfully:", updatedSale);
+    res.json(updatedSale);
+
   } catch (err) {
+    if (transaction) await transaction.rollback();
     console.error('Sale update failed:', err);
+    if (err.name === 'SequelizeValidationError') {
+      return res.status(400).json({ error: 'Validation failed', details: err.errors.map(e => e.message) });
+    }
     res.status(500).json({ error: 'Update failed', details: err.message });
   }
 };
 
-const deleteSale = async (req, res) => {
+// Delete a sale
+exports.deleteSale = async (req, res) => {
+  console.log("Sale deletion request received. id:", req.params.id);
+  let transaction;
   try {
+    transaction = await Sale.sequelize.transaction();
+
+    // Revert stock for products in this sale before deleting
+    const saleItems = await SaleItem.findAll({ where: { saleId: req.params.id }, transaction });
+    for (const item of saleItems) {
+      const product = await Product.findByPk(item.productId, { transaction });
+      if (product) {
+        product.stock += item.quantity; // Add back stock
+        await product.save({ transaction });
+      }
+    }
+
     const deleted = await Sale.destroy({
-      where: { id: req.params.id }
+      where: { id: req.params.id },
+      transaction
     });
 
     if (deleted) {
+      await transaction.commit();
+      console.log("Sale deleted successfully. ID:", req.params.id);
       res.status(204).send();
     } else {
+      await transaction.rollback();
       res.status(404).json({ error: 'Sale not found' });
     }
   } catch (err) {
+    if (transaction) await transaction.rollback();
     console.error('Sale deletion failed:', err);
     res.status(500).json({ error: 'Deletion failed', details: err.message });
   }
 };
 
-const generateInvoice = async (req, res) => {
-  try {
-    const sale = await Sale.findByPk(req.params.id, {
-      include: [
-        { model: Customer, as: 'customer' },
-        {
-          model: SaleItem,
-          as: 'items',
-          include: [{ model: Product, as: 'product', attributes: ['id', 'name', 'nameUrdu'] }] // Added 'nameUrdu'
-        }
-      ]
-    });
 
-    if (!sale) {
-      return res.status(404).json({ error: 'Sale not found' });
-    }
-
-    const invoiceData = {
-      invoiceId: `INV-${sale.id}`,
-      date: sale.saleDate,
-      customerName: sale.customer ? sale.customer.name : 'Walk-in Customer',
-      customerPhone: sale.customer ? sale.customer.contact : 'N/A',
-      customerAddress: sale.customer ? sale.customer.address : 'N/A',
-      items: sale.items.map(item => ({
-        productName: item.product ? item.product.name : 'Unknown Product',
-        productNameUrdu: item.product ? item.product.nameUrdu : null, // Added 'productNameUrdu'
-        quantity: item.quantity,
-        unitPrice: item.priceAtSale,
-        total: item.quantity * item.priceAtSale
-      })),
-      subTotal: sale.totalAmount,
-      discount: sale.discount || 0,
-      grandTotal: sale.totalAmount,
-      paymentStatus: sale.paymentStatus,
-      paymentMethod: sale.paymentMethod,
-      notes: sale.notes || 'Thank you for your business!',
-      companyName: 'Almadina Agro Vehari',
-      companyAddress: 'Vehari, Pakistan',
-      companyPhone: '+92 3XX XXXXXXX',
-    };
-
-    res.json(invoiceData);
-
-  } catch (err) {
-    console.error('Invoice generation failed:', err);
-    res.status(500).json({ error: 'Invoice generation failed', details: err.message });
-  }
-};
-
-
+// Export all functions
 module.exports = {
-  recordSale,
-  getSales,
-  getSaleById,
-  updateSale,
-  deleteSale,
-  generateInvoice,
+  createSale: exports.createSale, // Explicitly export createSale
+  getSales: exports.getSales,
+  getSaleById: exports.getSaleById,
+  updateSale: exports.updateSale,
+  deleteSale: exports.deleteSale,
+  generateInvoice: exports.generateInvoice, // Assuming generateInvoice is defined elsewhere in this file
 };

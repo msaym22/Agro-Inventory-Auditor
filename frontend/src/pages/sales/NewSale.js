@@ -2,9 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { createSale } from '../../api/sales';
+import { createSale } from '../../api/sales'; // Assuming this is your API call to create a sale
 import { toast } from 'react-toastify';
-import { addSale } from '../../features/sales/saleSlice';
+import { addSale } from '../../features/sales/saleSlice'; // Action to add sale to Redux state
 import { Button } from '../../components/common/Button';
 import FileUpload from '../../components/common/FileUpload';
 import ImagePreview from '../../components/common/ImagePreview';
@@ -14,7 +14,7 @@ import config from '../../config/config';
 // Import customer and product related thunks and components
 import { fetchCustomers, addNewCustomer } from '../../features/customers/customerSlice';
 import { fetchProducts } from '../../features/products/productSlice';
-import CustomerForm from '../../components/customers/CustomerForm';
+import CustomerForm from '../../components/customers/CustomerForm'; // This form is used for new customer details
 import SearchInput from '../../components/common/SearchInput';
 import InvoiceGenerator from '../../components/sales/InvoiceGenerator'; // Import for print functionality
 
@@ -47,7 +47,7 @@ const NewSale = () => {
   const [receiptImagePreviewUrl, setReceiptImagePreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false); // For sale submission
   const [showPrintPrompt, setShowPrintPrompt] = useState(false);
-  const [newlyCreatedSaleId, setNewlyCreatedSaleId] = useState(null);
+  const [newlyCreatedSaleData, setNewlyCreatedSaleData] = useState(null); // Store full sale data for InvoiceGenerator
 
   // Fetch customers and products on component mount
   useEffect(() => {
@@ -59,28 +59,12 @@ const NewSale = () => {
     setSelectedCustomer(customer);
     setCustomerSearchTerm(customer ? customer.name : '');
     setIsNewCustomer(false);
+    setNewCustomerData({ name: '', contact: '', address: '', creditLimit: 0, outstandingBalance: 0 }); // Clear new customer data
   };
 
   const handleNewCustomerChange = (e) => {
     const { name, value } = e.target;
     setNewCustomerData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleNewCustomerFormSubmit = async (data) => {
-    setLoading(true);
-    try {
-      const createdCustomer = await dispatch(addNewCustomer(data)).unwrap();
-      toast.success('New customer created!');
-      setSelectedCustomer(createdCustomer);
-      setIsNewCustomer(false);
-      setNewCustomerData({ name: '', contact: '', address: '', creditLimit: 0, outstandingBalance: 0 });
-      setCustomerSearchTerm(createdCustomer.name);
-    } catch (error) {
-      console.error('Failed to create new customer:', error);
-      toast.error('Failed to create new customer. Please try again.');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const addProductToSale = (product) => {
@@ -90,16 +74,15 @@ const NewSale = () => {
       setSaleItems(prev => prev.map((item, index) => {
         if (index === existingItemIndex) {
           const newQuantity = item.quantity + 1;
-          if (newQuantity > product.stock) { // Use product.stock directly from fetched product
+          if (newQuantity > product.stock) {
             toast.warn(`Cannot add more than ${product.stock} for ${item.name}.`);
-            return { ...item, quantity: product.stock }; // Cap quantity at available stock
+            return { ...item, quantity: product.stock };
           }
           return { ...item, quantity: newQuantity };
         }
         return item;
       }));
     } else {
-      // Add new product to cart
       setSaleItems([
         ...saleItems,
         {
@@ -107,11 +90,12 @@ const NewSale = () => {
           name: product.name,
           price: product.sellingPrice,
           quantity: 1,
-          stock: product.stock, // Keep track of original stock for validation
+          stock: product.stock,
+          nameUrdu: product.nameUrdu // Include nameUrdu for invoice generation
         }
       ]);
     }
-    setProductSearchTerm(''); // Clear product search after selection
+    setProductSearchTerm('');
   };
 
   const removeItem = (productId) => {
@@ -125,7 +109,6 @@ const NewSale = () => {
     setSaleItems(prev =>
       prev.map(item => {
         if (item.productId === productId) {
-          // Find the actual product object to get its current stock
           const originalProduct = products.find(p => p.id === productId);
           if (originalProduct && quantity > originalProduct.stock) {
             toast.warn(`Cannot add more than ${originalProduct.stock} for ${item.name}.`);
@@ -142,8 +125,11 @@ const NewSale = () => {
     const subtotal = saleItems.reduce(
       (sum, item) => sum + (item.price * item.quantity), 0
     );
-    const parsedDiscount = parseFloat(discount) || 0; // Parse discount from state
-    return Math.max(0, subtotal - parsedDiscount);
+    const parsedDiscount = parseFloat(discount) || 0;
+    return {
+      subTotal: subtotal,
+      grandTotal: Math.max(0, subtotal - parsedDiscount)
+    };
   };
 
   const handleReceiptFileSelect = (file) => {
@@ -157,52 +143,65 @@ const NewSale = () => {
 
   const handleSubmitSale = async (e) => {
     e.preventDefault();
+    setLoading(true); // Start loading for the entire submission process
 
     let customerIdToUse = selectedCustomer?.id;
+    let finalCustomerName = selectedCustomer?.name; // For invoice display
+    let finalCustomerContact = selectedCustomer?.contact;
+    let finalCustomerAddress = selectedCustomer?.address;
 
-    // If it's a new customer and form is filled, create customer first
-    if (isNewCustomer && newCustomerData.name) {
-      if (!newCustomerData.name) {
-        toast.error('New customer name is required.');
+    // Problem 1 & 3 Solution: Handle new customer creation within sale submission
+    if (isNewCustomer) {
+      if (!newCustomerData.name.trim()) { // Validate new customer name
+        toast.error('Customer name is required to create a new customer.');
+        setLoading(false);
         return;
       }
-      setLoading(true);
       try {
         const createdCustomer = await dispatch(addNewCustomer(newCustomerData)).unwrap();
         customerIdToUse = createdCustomer.id;
-        toast.success('New customer created and selected for sale!');
+        finalCustomerName = createdCustomer.name;
+        finalCustomerContact = createdCustomer.contact;
+        finalCustomerAddress = createdCustomer.address;
+        toast.success('New customer created!');
       } catch (error) {
         console.error('Failed to create new customer for sale:', error);
         toast.error('Failed to create new customer. Sale not recorded.');
         setLoading(false);
         return;
-      } finally {
-        setLoading(false);
       }
-    } else if (!customerIdToUse) {
+    } else if (!customerIdToUse) { // If not new customer, but no existing customer selected
       toast.error('Please select an existing customer or create a new one.');
+      setLoading(false);
       return;
     }
 
     if (saleItems.length === 0) {
       toast.error('Please add at least one product to the sale.');
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
+    const { subTotal, grandTotal } = calculateTotal();
 
     const saleData = {
       customerId: customerIdToUse,
+      saleDate: new Date().toISOString(), // Add saleDate
       items: saleItems.map(item => ({
         productId: item.productId,
         quantity: item.quantity,
-        priceAtSale: item.price
+        priceAtSale: item.price // priceAtSale should be the unit price at the time of sale
       })),
       discount: parseFloat(discount) || 0, // Ensure discount is a number when sending
       paymentMethod: paymentMethod,
       paymentStatus: paymentStatus,
-      totalAmount: calculateTotal(),
-      notes: notes
+      totalAmount: grandTotal, // Use grandTotal for totalAmount
+      subTotal: subTotal, // Add subTotal to saleData
+      notes: notes,
+      // For InvoiceGenerator, include customer and product details directly if needed
+      customerName: finalCustomerName,
+      customerPhone: finalCustomerContact,
+      customerAddress: finalCustomerAddress,
     };
 
     const formData = new FormData();
@@ -212,13 +211,34 @@ const NewSale = () => {
     }
 
     try {
-      const response = await createSale(formData);
-      dispatch(addSale(response));
-      setNewlyCreatedSaleId(response.id);
-      setShowPrintPrompt(true);
+      // Problem 1 & 2 Solution: Ensure createSale returns the full sale object
+      // and add it to Redux state correctly.
+      const response = await createSale(formData); // This should return the created sale object from backend
+      
+      // Ensure the response from createSale is the full sale object with ID
+      if (response && response.id) {
+        dispatch(addSale(response)); // Add the newly created sale to Redux state
+        setNewlyCreatedSaleData({ // Set full sale data for invoice generator
+          ...response, // Use the response from backend which should have all details including ID
+          customerName: finalCustomerName, // Use the final customer name (new or existing)
+          customerPhone: finalCustomerContact, // Add phone
+          customerAddress: finalCustomerAddress, // Add address
+          items: saleItems.map(item => ({ // Ensure items array is structured for InvoiceGenerator
+            ...item,
+            total: item.price * item.quantity, // Calculate total for each item
+            unitPrice: item.price // Ensure unitPrice is available
+          }))
+        });
+        setShowPrintPrompt(true);
+        toast.success('Sale recorded successfully!');
+      } else {
+        // Fallback if backend response is not as expected
+        toast.error('Sale recorded, but response missing ID. Please check backend.');
+        console.error('Unexpected response from createSale:', response);
+      }
     } catch (error) {
       console.error('Failed to record sale:', error);
-      toast.error('Failed to record sale. Please try again.');
+      toast.error(`Failed to record sale: ${error.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -226,14 +246,16 @@ const NewSale = () => {
 
   const handlePrintConfirmation = (confirm) => {
     setShowPrintPrompt(false);
-    if (confirm && newlyCreatedSaleId) {
-      navigate(`/sales/${newlyCreatedSaleId}`);
+    if (confirm && newlyCreatedSaleData) {
+      // Navigate to SaleDetail page which will render InvoiceGenerator
+      navigate(`/sales/${newlyCreatedSaleData.id}`); 
     } else {
+      // Problem 4 Solution: Redirect to sales list when 'No, Thank You' is clicked
       // Reset all form states
       setSelectedCustomer(null);
       setIsNewCustomer(false);
-      setNewCustomerData({ name: '', contact: '', address: '', creditLimit: 0, outstandingBalance: 0 });
-      setCustomerSearchTerm('');
+      setNewCustomerData({ name: '', contact: '', address: '', creditLimit: 0, outstandingBalance: 0 }); // Clear new customer data
+      setCustomerSearchTerm(''); // Clear search term
       setSaleItems([]);
       setProductSearchTerm('');
       setDiscount(''); // Reset to empty string
@@ -242,7 +264,8 @@ const NewSale = () => {
       setNotes('');
       setReceiptImageFile(null);
       setReceiptImagePreviewUrl(null);
-      setNewlyCreatedSaleId(null);
+      setNewlyCreatedSaleData(null); // Clear newly created sale data
+      navigate('/sales'); // Redirect to sales list
     }
   };
 
@@ -280,7 +303,10 @@ const NewSale = () => {
                   <p className="mb-2">No customer found matching "{customerSearchTerm}".</p>
                   <Button
                     type="button"
-                    onClick={() => setIsNewCustomer(true)}
+                    onClick={() => {
+                      setIsNewCustomer(true);
+                      setSelectedCustomer(null); // Ensure selectedCustomer is null when creating new
+                    }}
                     variant="secondary"
                     size="small"
                   >
@@ -315,12 +341,15 @@ const NewSale = () => {
               <CustomerForm
                 customer={newCustomerData}
                 onChange={handleNewCustomerChange}
-                onSubmit={handleNewCustomerFormSubmit}
                 loading={loading}
               />
               <Button
                 type="button"
-                onClick={() => setIsNewCustomer(false)}
+                onClick={() => {
+                  setIsNewCustomer(false);
+                  setNewCustomerData({ name: '', contact: '', address: '', creditLimit: 0, outstandingBalance: 0 }); // Clear new customer data
+                  setCustomerSearchTerm(''); // Clear search term
+                }}
                 variant="secondary"
                 size="small"
                 className="mt-4"
@@ -348,7 +377,7 @@ const NewSale = () => {
                   <p className="text-sm text-gray-500">
                     {CURRENCY} {product.sellingPrice.toFixed(2)} |
                     Stock: {product.stock} |
-                    Location: {product.storageLocation || 'N/A'} {/* Added storageLocation */}
+                    Location: {product.storageLocation || 'N/A'}
                   </p>
                 </div>
               )}
@@ -402,7 +431,7 @@ const NewSale = () => {
 
               <div className="p-4 border-t border-gray-200 text-right">
                 <div className="text-xl font-bold text-gray-900">
-                  Subtotal: {CURRENCY} {calculateTotal().toFixed(2)}
+                  Subtotal: {CURRENCY} {calculateTotal().subTotal.toFixed(2)}
                 </div>
               </div>
             </div>
@@ -492,7 +521,7 @@ const NewSale = () => {
 
           <div className="mt-8 text-right pt-6 border-t border-gray-200">
             <div className="text-2xl font-extrabold text-gray-900">
-              Grand Total: {CURRENCY} {calculateTotal().toFixed(2)}
+              Grand Total: {CURRENCY} {calculateTotal().grandTotal.toFixed(2)}
             </div>
           </div>
         </div>

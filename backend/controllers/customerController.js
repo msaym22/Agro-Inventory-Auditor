@@ -55,12 +55,21 @@ exports.getCustomerById = async (req, res) => {
 
 // Create a new customer
 exports.createCustomer = async (req, res) => {
+  console.log("Customer creation request received. req.body:", req.body); // IMPORTANT LOG
   try {
     const customer = await Customer.create(req.body);
-    res.status(201).json(customer);
+    console.log("Customer created successfully:", customer); // IMPORTANT LOG
+    return res.status(201).json(customer);
   } catch (error) {
-    console.error('Error creating customer:', error);
-    res.status(500).json({ error: 'Failed to create customer' });
+    console.error("Error creating customer in backend:", error); // IMPORTANT LOG
+    // More detailed error response for debugging
+    if (error.name === 'SequelizeValidationError') {
+      return res.status(400).json({ error: 'Validation failed', details: error.errors.map(e => e.message) });
+    }
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({ error: 'Customer already exists', details: error.message });
+    }
+    return res.status(500).json({ error: 'Internal server error during customer creation', details: error.message });
   }
 };
 

@@ -1,14 +1,21 @@
 // frontend/src/pages/dashboard/Dashboard.js
-import React, { useEffect } from 'react'; // Removed useState as it's not used directly here
+import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 // Import the thunks
 import { fetchProducts } from '../../features/products/productSlice';
 import { fetchCustomers } from '../../features/customers/customerSlice';
-import { fetchSales, fetchSalesAnalytics, fetchProductAnalytics, fetchOverallProfit, fetchProfitByProduct, fetchSalesByCustomerWithQuantity } from '../../features/sales/saleSlice';
+import { 
+  fetchSales, 
+  fetchSalesAnalytics, 
+  fetchProductAnalytics, 
+  fetchOverallProfit, 
+  fetchProfitByProduct, 
+  fetchSalesByCustomerWithQuantity 
+} from '../../features/sales/saleSlice';
 
 import QuickStats from '../../components/dashboard/QuickStats';
-import SalesSummary from '../../components/dashboard/SalesSummary'; // Keep this import for the new analytics page functionality
-import AnalyticsChart from '../../components/dashboard/AnalyticsChart'; // Keep this import for the new analytics page functionality
+import SalesSummary from '../../components/dashboard/SalesSummary';
+import AnalyticsChart from '../../components/dashboard/AnalyticsChart';
 import LowStockAlert from '../../components/dashboard/LowStockAlert';
 import Loading from '../../components/common/Loading';
 
@@ -18,8 +25,9 @@ const Dashboard = () => {
   const { products = [], loading: productsLoading, error: productsError } = useSelector(state => state.products);
   const { customers = [], loading: customersLoading, error: customersError } = useSelector(state => state.customers);
 
+  // UPDATED: Correctly access 'items' from state.sales and alias it to 'sales' for local use
   const {
-    sales = [], // Assuming state.sales.sales is the array of sales objects
+    items: sales = [], // Changed from 'sales' to 'items' to match saleSlice initialState
     salesAnalytics = { // Ensure salesAnalytics is an object with default nested properties
       totalSales: 0,
       totalRevenue: 0,
@@ -31,13 +39,13 @@ const Dashboard = () => {
     },
     loading: salesLoading,
     error: salesError
-  } = useSelector(state => state.sales);
+  } = useSelector(state => state.sales); // state.sales is now the entire sales slice object
 
   // --- DIAGNOSTIC LOGS ---
   console.log("Dashboard Redux State Check:");
   console.log("products:", products);
   console.log("customers:", customers);
-  console.log("sales:", sales);
+  console.log("sales:", sales); // This will now correctly log the items array
   console.log("salesAnalytics:", salesAnalytics);
   console.log("salesAnalytics.salesByPeriod:", salesAnalytics.salesByPeriod);
   console.log("salesAnalytics.productSales:", salesAnalytics.productSales);
@@ -45,7 +53,6 @@ const Dashboard = () => {
   console.log("customers.length:", customers?.length);
   console.log("sales.length:", sales?.length);
   // --- END DIAGNOSTIC LOGS ---
-
 
   useEffect(() => {
     const loadAllDashboardData = async () => {
@@ -66,7 +73,7 @@ const Dashboard = () => {
   const loading = productsLoading || customersLoading || salesLoading;
   const error = productsError || customersError || salesError;
 
-  const totalSalesCount = sales?.length || 0;
+  const totalSalesCount = sales?.length || 0; // Use the renamed 'sales' variable (which is 'items')
   const totalCustomersCount = customers?.length || 0;
 
   const lowStockProducts = Array.isArray(products) ? products.filter(p => p.stock < 10) : [];

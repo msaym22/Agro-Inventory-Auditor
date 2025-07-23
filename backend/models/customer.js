@@ -1,27 +1,57 @@
+// backend/models/customer.js
+'use strict';
+const {
+  Model
+} = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
-  const Customer = sequelize.define('Customer', {
+  class Customer extends Model {
+    static associate(models) {
+      Customer.hasMany(models.Sale, {
+        foreignKey: 'customerId',
+        as: 'sales'
+      });
+    }
+  }
+  Customer.init({
     name: {
       type: DataTypes.STRING,
-      allowNull: false
+      allowNull: false, // Ensure this matches your DB. If frontend sends empty, it fails.
     },
-    contact: DataTypes.STRING,
-    address: DataTypes.TEXT,
-    creditLimit: DataTypes.FLOAT,
+    contact: {
+      type: DataTypes.STRING,
+      allowNull: true, // If it's optional
+      // unique: true, // If this is true in DB and you send duplicate, it will fail
+    },
+    address: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    creditLimit: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      defaultValue: 0.00,
+    },
     outstandingBalance: {
-      type: DataTypes.FLOAT,
-      defaultValue: 0
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      defaultValue: 0.00,
     },
-    lastPurchase: DataTypes.DATE,
-    digikhataId: DataTypes.STRING,
-    customerImage: DataTypes.STRING // Added for customer receipt/profile image
+    lastPurchase: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    digikhataId: {
+      type: DataTypes.STRING,
+      allowNull: true, // If it's optional
+      // unique: true, // If this is true in DB and you send duplicate, it will fail
+    },
+    customerImage: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+  }, {
+    sequelize,
+    modelName: 'Customer',
   });
-
-  Customer.associate = models => {
-    Customer.hasMany(models.Sale, {
-      foreignKey: 'customerId',
-      as: 'purchases'
-    });
-  };
-
   return Customer;
 };

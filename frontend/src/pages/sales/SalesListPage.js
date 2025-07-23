@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchSales } from '../../features/sales/saleSlice'; // CORRECTED IMPORT PATH
+import { fetchSales } from '../../features/sales/saleSlice';
 import { Link, useNavigate } from 'react-router-dom';
 import SaleList from '../../components/sales/SaleList';
 import SearchInput from '../../components/common/SearchInput';
@@ -10,7 +10,8 @@ import { Button } from '../../components/common/Button';
 const SalesListPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const salesState = useSelector(state => state.sales.items); // Access the 'items' property
+  // Ensure salesState defaults to an empty array if undefined/null
+  const salesState = useSelector(state => state.sales.items || []); 
   const status = useSelector(state => state.sales.status);
   const error = useSelector(state => state.sales.error);
   const pagination = useSelector(state => state.sales.pagination);
@@ -67,7 +68,7 @@ const SalesListPage = () => {
           <div className="text-red-500 text-center py-8 text-lg">
             Error: {error}
           </div>
-        ) : salesState && salesState.length === 0 ? (
+        ) : salesState.length === 0 ? ( // Check salesState.length after ensuring it's an array
           <div className="text-center py-12 text-gray-600">
             <p className="text-lg mb-4">No sales records found.</p>
             <Button
@@ -81,7 +82,7 @@ const SalesListPage = () => {
         ) : (
           <>
             <SaleList
-              sales={salesState}
+              sales={salesState} // salesState is now guaranteed to be an array
               onSelect={handleSelectSale}
             />
 

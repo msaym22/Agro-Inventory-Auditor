@@ -3,20 +3,25 @@ import salesAPI from '../../api/sales';
 import * as analyticsAPI from '../../api/analytics';
 
 const initialState = {
-  sales: [],
+  items: [], // Renamed from 'sales' to 'items' for clarity in lists
+  pagination: {
+    currentPage: 1,
+    itemsPerPage: 20,
+    totalItems: 0,
+    totalPages: 1,
+  },
   currentSale: null,
   salesAnalytics: {
     totalSales: 0,
     totalRevenue: 0,
-    totalProfit: 0, // New state for overall profit
+    totalProfit: 0,
     salesByPeriod: [],
-    productSales: [],
-    profitByProduct: [], // New state for profit by product
-    salesByCustomer: [], // New state for sales by customer with quantity
+    productSales: [], 
+    profitByProduct: [], 
+    salesByCustomer: [], 
   },
   loading: false, // General loading for sales list/current sale
   error: null,
-  // Separate loading/error for analytics if needed, or use salesAnalytics.loading/error
 };
 
 export const fetchSales = createAsyncThunk(
@@ -85,7 +90,8 @@ export const fetchSalesAnalytics = createAsyncThunk(
   async (period, { rejectWithValue }) => {
     try {
       const response = await analyticsAPI.getSalesAnalytics(period);
-      return response.data;
+      // Ensure response.data is always an object to prevent 'undefined.totalSales' errors
+      return response.data || {}; 
     } catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to fetch sales analytics');
     }
@@ -96,8 +102,8 @@ export const fetchProductAnalytics = createAsyncThunk(
   'sales/fetchProductAnalytics',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await analyticsAPI.getProductAnalytics(); // This is for product sales performance
-      return response.data;
+      const response = await analyticsAPI.getProductAnalytics(); 
+      return response.data || {}; 
     } catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to fetch product analytics');
     }
@@ -109,7 +115,7 @@ export const fetchOverallProfit = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await analyticsAPI.getOverallProfit();
-      return response.data;
+      return response.data || {};
     } catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to fetch overall profit');
     }
@@ -121,7 +127,7 @@ export const fetchProfitByProduct = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await analyticsAPI.getProfitByProduct();
-      return response.data;
+      return response.data || {};
     } catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to fetch profit by product');
     }
@@ -133,7 +139,7 @@ export const fetchSalesByCustomerWithQuantity = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await analyticsAPI.getSalesByCustomerWithQuantity();
-      return response.data;
+      return response.data || {};
     } catch (err) {
       return rejectWithValue(err.response?.data || 'Failed to fetch sales by customer');
     }
@@ -146,10 +152,16 @@ const salesSlice = createSlice({
   initialState,
   reducers: {
     addSale: (state, action) => {
-      state.sales.unshift(action.payload);
+      if (!Array.isArray(state.items)) {
+        state.items = []; 
+      }
+      state.items.unshift(action.payload);
     },
     removeSale: (state, action) => {
-      state.sales = state.sales.filter((sale) => sale.id !== action.payload);
+      if (!Array.isArray(state.items)) {
+        state.items = [];
+      }
+      state.items = state.items.filter((sale) => sale.id !== action.payload);
     },
   },
   extraReducers: (builder) => {
@@ -157,25 +169,32 @@ const salesSlice = createSlice({
       // Handle fetchSales
       .addCase(fetchSales.pending, (state) => {
         state.loading = true;
+        state.error = null; 
       })
       .addCase(fetchSales.fulfilled, (state, action) => {
         state.loading = false;
-        state.sales = action.payload.sales || []; // Ensure sales is an array
-        state.pagination = action.payload.pagination || {}; // Ensure pagination is an object
+        // Ensure action.payload is an object before destructuring, and then default properties
+        const { sales = [], pagination = initialState.pagination } = action.payload || {};
+        state.items = sales; 
+        state.pagination = pagination; 
       })
       .addCase(fetchSales.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-        state.sales = []; // Reset sales on error
-        state.pagination = {};
+        state.items = []; 
+        state.pagination = initialState.pagination;
       })
       // Handle addNewSale
       .addCase(addNewSale.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(addNewSale.fulfilled, (state, action) => {
         state.loading = false;
-        state.sales.unshift(action.payload);
+        if (!Array.isArray(state.items)) {
+          state.items = [];
+        }
+        state.items.unshift(action.payload);
       })
       .addCase(addNewSale.rejected, (state, action) => {
         state.loading = false;
@@ -184,6 +203,7 @@ const salesSlice = createSlice({
       // Handle fetchSaleById
       .addCase(fetchSaleById.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(fetchSaleById.fulfilled, (state, action) => {
         state.loading = false;
@@ -197,12 +217,15 @@ const salesSlice = createSlice({
       // Handle updateExistingSale
       .addCase(updateExistingSale.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(updateExistingSale.fulfilled, (state, action) => {
         state.loading = false;
-        const index = state.sales.findIndex(sale => sale.id === action.payload.id);
-        if (index !== -1) {
-          state.sales[index] = action.payload;
+        if (Array.isArray(state.items)) {
+          const index = state.items.findIndex(sale => sale.id === action.payload.id);
+          if (index !== -1) {
+            state.items[index] = action.payload;
+          }
         }
         if (state.currentSale && state.currentSale.id === action.payload.id) {
           state.currentSale = action.payload;
@@ -215,10 +238,13 @@ const salesSlice = createSlice({
       // Handle deleteExistingSale
       .addCase(deleteExistingSale.pending, (state) => {
         state.loading = true;
+        state.error = null;
       })
       .addCase(deleteExistingSale.fulfilled, (state, action) => {
         state.loading = false;
-        state.sales = state.sales.filter((sale) => sale.id !== action.payload);
+        if (Array.isArray(state.items)) {
+          state.items = state.items.filter((sale) => sale.id !== action.payload);
+        }
       })
       .addCase(deleteExistingSale.rejected, (state, action) => {
         state.loading = false;
@@ -230,30 +256,44 @@ const salesSlice = createSlice({
         state.salesAnalytics.error = null;
       })
       .addCase(fetchSalesAnalytics.fulfilled, (state, action) => {
+        console.log("fetchSalesAnalytics.fulfilled payload:", action.payload); // Diagnostic log
         state.salesAnalytics.loading = false;
-        state.salesAnalytics.totalSales = action.payload.totalSales || 0;
-        state.salesAnalytics.totalRevenue = action.payload.totalRevenue || 0;
-        state.salesAnalytics.salesByPeriod = action.payload.salesByPeriod || [];
-        state.salesAnalytics.productSales = action.payload.productSales || []; // Assuming productSales comes with this payload
+        const payload = action.payload ?? {}; // Ensure payload is an object
+
+        state.salesAnalytics.totalSales = payload.totalSales ?? 0;
+        state.salesAnalytics.totalRevenue = payload.totalRevenue ?? 0;
+        state.salesAnalytics.totalProfit = payload.totalProfit ?? 0;
+        state.salesAnalytics.salesByPeriod = payload.salesByPeriod ?? [];
+        state.salesAnalytics.productSales = payload.productSales ?? []; 
+        state.salesAnalytics.profitByProduct = payload.profitByProduct ?? []; 
+        state.salesAnalytics.salesByCustomer = payload.salesByCustomer ?? []; 
       })
       .addCase(fetchSalesAnalytics.rejected, (state, action) => {
+        console.log("fetchSalesAnalytics.rejected payload:", action.payload); // Diagnostic log
         state.salesAnalytics.loading = false;
         state.salesAnalytics.error = action.payload;
+        // Reset all analytics properties on error
         state.salesAnalytics.totalSales = 0;
         state.salesAnalytics.totalRevenue = 0;
+        state.salesAnalytics.totalProfit = 0;
         state.salesAnalytics.salesByPeriod = [];
         state.salesAnalytics.productSales = [];
+        state.salesAnalytics.profitByProduct = [];
+        state.salesAnalytics.salesByCustomer = [];
       })
-      // Handle fetchProductAnalytics (this thunk now specifically for product sales performance)
+      // Handle fetchProductAnalytics
       .addCase(fetchProductAnalytics.pending, (state) => {
-        state.salesAnalytics.loading = true; // Still use this loading for all analytics fetches
+        state.salesAnalytics.loading = true; 
         state.salesAnalytics.error = null;
       })
       .addCase(fetchProductAnalytics.fulfilled, (state, action) => {
+        console.log("fetchProductAnalytics.fulfilled payload:", action.payload); // Diagnostic log
+        const payload = action.payload ?? {};
         state.salesAnalytics.loading = false;
-        state.salesAnalytics.productSales = action.payload.productSales || [];
+        state.salesAnalytics.productSales = payload.productSales ?? [];
       })
       .addCase(fetchProductAnalytics.rejected, (state, action) => {
+        console.log("fetchProductAnalytics.rejected payload:", action.payload); // Diagnostic log
         state.salesAnalytics.loading = false;
         state.salesAnalytics.error = action.payload;
         state.salesAnalytics.productSales = [];
@@ -264,10 +304,13 @@ const salesSlice = createSlice({
         state.salesAnalytics.error = null;
       })
       .addCase(fetchOverallProfit.fulfilled, (state, action) => {
+        console.log("fetchOverallProfit.fulfilled payload:", action.payload); // Diagnostic log
+        const payload = action.payload ?? {};
         state.salesAnalytics.loading = false;
-        state.salesAnalytics.totalProfit = action.payload.totalProfit || 0;
+        state.salesAnalytics.totalProfit = payload.totalProfit ?? 0;
       })
       .addCase(fetchOverallProfit.rejected, (state, action) => {
+        console.log("fetchOverallProfit.rejected payload:", action.payload); // Diagnostic log
         state.salesAnalytics.loading = false;
         state.salesAnalytics.error = action.payload;
         state.salesAnalytics.totalProfit = 0;
@@ -278,10 +321,13 @@ const salesSlice = createSlice({
         state.salesAnalytics.error = null;
       })
       .addCase(fetchProfitByProduct.fulfilled, (state, action) => {
+        console.log("fetchProfitByProduct.fulfilled payload:", action.payload); // Diagnostic log
+        const payload = action.payload ?? {};
         state.salesAnalytics.loading = false;
-        state.salesAnalytics.profitByProduct = action.payload.profitByProduct || [];
+        state.salesAnalytics.profitByProduct = payload.profitByProduct ?? [];
       })
       .addCase(fetchProfitByProduct.rejected, (state, action) => {
+        console.log("fetchProfitByProduct.rejected payload:", action.payload); // Diagnostic log
         state.salesAnalytics.loading = false;
         state.salesAnalytics.error = action.payload;
         state.salesAnalytics.profitByProduct = [];
@@ -292,10 +338,13 @@ const salesSlice = createSlice({
         state.salesAnalytics.error = null;
       })
       .addCase(fetchSalesByCustomerWithQuantity.fulfilled, (state, action) => {
+        console.log("fetchSalesByCustomerWithQuantity.fulfilled payload:", action.payload); // Diagnostic log
+        const payload = action.payload ?? {};
         state.salesAnalytics.loading = false;
-        state.salesAnalytics.salesByCustomer = action.payload.salesByCustomer || [];
+        state.salesAnalytics.salesByCustomer = payload.salesByCustomer ?? [];
       })
       .addCase(fetchSalesByCustomerWithQuantity.rejected, (state, action) => {
+        console.log("fetchSalesByCustomerWithQuantity.rejected payload:", action.payload); // Diagnostic log
         state.salesAnalytics.loading = false;
         state.salesAnalytics.error = action.payload;
         state.salesAnalytics.salesByCustomer = [];
