@@ -1,9 +1,8 @@
-// frontend/src/components/products/ProductForm.js
 import React from 'react';
-import RichTextEditor from '../common/RichTextEditor'; // Import RichTextEditor
-import FileUpload from '../common/FileUpload'; // Import FileUpload
-import ImagePreview from '../common/ImagePreview'; // Import ImagePreview
-import { Button } from '../common/Button'; // Import Button
+import RichTextEditor from '../common/RichTextEditor';
+import FileUpload from '../common/FileUpload';
+import ImagePreview from '../common/ImagePreview';
+import { Button } from '../common/Button';
 import config from '../../config/config';
 
 const { CURRENCY } = config;
@@ -12,10 +11,10 @@ const ProductForm = ({
   product,
   onChange,
   onImageChange,
-  onDescriptionChange, // New prop for RichTextEditor
+  onDescriptionChange,
   onSubmit,
   loading,
-  imagePreviewUrl // New prop for image preview
+  imagePreviewUrl
 }) => {
   return (
     <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-100">
@@ -26,7 +25,7 @@ const ProductForm = ({
             <h2 className="text-2xl font-semibold text-gray-800 mb-6">Product Details</h2>
 
             <div className="mb-5">
-              <label htmlFor="name" className="block font-medium text-gray-700 mb-2">Product Name<span className="text-red-500">*</span></label>
+              <label htmlFor="name" className="block font-medium text-gray-700 mb-2">Product Name (English)<span className="text-red-500">*</span></label>
               <input
                 type="text"
                 id="name"
@@ -36,6 +35,20 @@ const ProductForm = ({
                 required
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 shadow-sm"
                 placeholder="e.g., Super Growth Fertilizer"
+              />
+            </div>
+
+            <div className="mb-5">
+              <label htmlFor="nameUrdu" className="block font-medium text-gray-700 mb-2">Product Name (Urdu)</label>
+              <input
+                type="text"
+                id="nameUrdu"
+                name="nameUrdu"
+                value={product.nameUrdu || ''} // New field for Urdu name
+                onChange={onChange}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 shadow-sm"
+                placeholder="مثلاً، سپر گروتھ کھاد"
+                dir="rtl" // Set direction to right-to-left for Urdu input
               />
             </div>
 
@@ -89,9 +102,9 @@ const ProductForm = ({
               <label htmlFor="stock" className="block font-medium text-gray-700 mb-2">Stock Quantity</label>
               <input
                 type="number"
-                id="stock"       // Changed from "stockQuantity" to "stock"
-                name="stock"     // Changed from "stockQuantity" to "stock"
-                value={product.stock} // Changed from "product.stockQuantity" to "product.stock"
+                id="stock"
+                name="stock"
+                value={product.stock}
                 onChange={onChange}
                 min="0"
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 shadow-sm"
@@ -197,7 +210,7 @@ const ProductForm = ({
                 value={product.comments}
                 onChange={onChange}
                 rows="3"
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 shadow-sm"
+                className="w-full p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300"
                 placeholder="Any additional notes about the product..."
               ></textarea>
             </div>

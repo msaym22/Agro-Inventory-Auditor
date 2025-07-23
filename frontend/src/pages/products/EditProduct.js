@@ -3,41 +3,38 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import ProductForm from '../../components/products/ProductForm';
-import productsAPI from '../../api/products'; // Correctly import the API utility
+import productsAPI from '../../api/products';
 import { toast } from 'react-toastify';
 import Loading from '../../components/common/Loading';
-import { fetchProductById, updateExistingProduct } from '../../features/products/productSlice'; // Import thunks
+import { fetchProductById, updateExistingProduct } from '../../features/products/productSlice';
 
 export const EditProduct = () => {
-  const { id } = useParams(); // Get product ID from URL
+  const { id } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  const { currentProduct, loading, error } = useSelector(state => state.products); // Get data from Redux store
+  const { currentProduct, loading, error } = useSelector(state => state.products);
 
-  const [productData, setProductData] = useState(null); // State to hold product data for the form
+  const [productData, setProductData] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
-  const [formLoading, setFormLoading] = useState(false); // Loading state for form submission
+  const [formLoading, setFormLoading] = useState(false);
 
   useEffect(() => {
-    // Fetch product by ID when component mounts or ID changes
     dispatch(fetchProductById(id));
   }, [dispatch, id]);
 
   useEffect(() => {
     if (currentProduct) {
-      // Initialize form data when currentProduct is loaded from Redux
       setProductData({
         ...currentProduct,
-        // Ensure that float/integer values are correctly parsed if necessary
+        nameUrdu: currentProduct.nameUrdu || '', // Initialize nameUrdu from fetched data
         sellingPrice: parseFloat(currentProduct.sellingPrice),
         purchasePrice: currentProduct.purchasePrice !== null ? parseFloat(currentProduct.purchasePrice) : '',
         minimumPrice: currentProduct.minimumPrice !== null ? parseFloat(currentProduct.minimumPrice) : '',
-        stock: parseInt(currentProduct.stock), // Use 'stock' from backend
-        expiryDate: currentProduct.expiryDate ? new Date(currentProduct.expiryDate).toISOString().split('T')[0] : '', // Format date for input type="date"
+        stock: parseInt(currentProduct.stock),
+        expiryDate: currentProduct.expiryDate ? new Date(currentProduct.expiryDate).toISOString().split('T')[0] : '',
       });
-      // Set image preview if product has an image
       if (currentProduct.image) {
         setImagePreviewUrl(`/uploads/${currentProduct.image}`);
       } else {
@@ -76,7 +73,7 @@ export const EditProduct = () => {
       sellingPrice: parseFloat(productData.sellingPrice),
       purchasePrice: productData.purchasePrice !== '' ? parseFloat(productData.purchasePrice) : null,
       minimumPrice: productData.minimumPrice !== '' ? parseFloat(productData.minimumPrice) : null,
-      stock: parseInt(productData.stock), // Ensure 'stock' is sent as integer
+      stock: parseInt(productData.stock),
       expiryDate: productData.expiryDate || null,
     };
 
@@ -93,7 +90,7 @@ export const EditProduct = () => {
 
       await dispatch(updateExistingProduct({ id, productData: formData })).unwrap();
       toast.success('Product updated successfully!');
-      navigate('/products'); // Redirect to product list page after update
+      navigate('/products');
     } catch (error) {
       console.error('Failed to update product:', error);
       toast.error(`Failed to update product: ${error.message || 'Unknown error'}`);
@@ -102,7 +99,7 @@ export const EditProduct = () => {
     }
   };
 
-  if (loading || !productData) { // Show loading until productData is initialized
+  if (loading || !productData) {
     return <Loading />;
   }
 
@@ -119,7 +116,7 @@ export const EditProduct = () => {
         onImageChange={handleImageChange}
         onDescriptionChange={handleDescriptionChange}
         onSubmit={handleSubmit}
-        loading={formLoading} // Use formLoading for form submission
+        loading={formLoading}
         imagePreviewUrl={imagePreviewUrl}
       />
     </div>

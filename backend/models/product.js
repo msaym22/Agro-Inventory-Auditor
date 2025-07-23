@@ -4,6 +4,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       allowNull: false
     },
+    nameUrdu: { // <--- ADDED FOR URDU NAME
+      type: DataTypes.STRING,
+      allowNull: true // Allow null if not all products will have an Urdu name
+    },
     sellingPrice: {
       type: DataTypes.FLOAT,
       allowNull: false
@@ -15,7 +19,7 @@ module.exports = (sequelize, DataTypes) => {
     applications: DataTypes.STRING,
     category: DataTypes.STRING,
     comments: DataTypes.TEXT,
-    storageLocation: DataTypes.STRING, // Changed from 'location' to 'storageLocation' for consistency
+    storageLocation: DataTypes.STRING,
     sku: {
       type: DataTypes.STRING,
       unique: true
@@ -46,10 +50,9 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'productId',
       otherKey: 'alternativeId'
     });
-    // A Product can be part of many SaleItems
     Product.hasMany(models.SaleItem, {
       foreignKey: 'productId',
-      as: 'saleItems' // Or 'itemsSold'
+      as: 'saleItems'
     });
   };
 

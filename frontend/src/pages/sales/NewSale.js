@@ -15,7 +15,7 @@ import config from '../../config/config';
 import { fetchCustomers, addNewCustomer } from '../../features/customers/customerSlice';
 import { fetchProducts } from '../../features/products/productSlice';
 import CustomerForm from '../../components/customers/CustomerForm';
-import SearchInput from '../../components/common/SearchInput'; // Reusing SearchInput for customer/product selection
+import SearchInput from '../../components/common/SearchInput';
 import InvoiceGenerator from '../../components/sales/InvoiceGenerator'; // Import for print functionality
 
 const { CURRENCY } = config;
@@ -39,15 +39,15 @@ const NewSale = () => {
   const [saleItems, setSaleItems] = useState([]);
   const [productSearchTerm, setProductSearchTerm] = useState('');
 
-  const [discount, setDiscount] = useState(0);
+  const [discount, setDiscount] = useState(''); // Changed to string for display flexibility
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentStatus, setPaymentStatus] = useState('paid');
-  const [notes, setNotes] = useState(''); // Added notes state
+  const [notes, setNotes] = useState('');
   const [receiptImageFile, setReceiptImageFile] = useState(null);
   const [receiptImagePreviewUrl, setReceiptImagePreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false); // For sale submission
-  const [showPrintPrompt, setShowPrintPrompt] = useState(false); // New state for print prompt
-  const [newlyCreatedSaleId, setNewlyCreatedSaleId] = useState(null); // To store sale ID for printing
+  const [showPrintPrompt, setShowPrintPrompt] = useState(false);
+  const [newlyCreatedSaleId, setNewlyCreatedSaleId] = useState(null);
 
   // Fetch customers and products on component mount
   useEffect(() => {
@@ -74,7 +74,7 @@ const NewSale = () => {
       setSelectedCustomer(createdCustomer);
       setIsNewCustomer(false);
       setNewCustomerData({ name: '', contact: '', address: '', creditLimit: 0, outstandingBalance: 0 });
-      setCustomerSearchTerm(createdCustomer.name); // Set search term to new customer's name
+      setCustomerSearchTerm(createdCustomer.name);
     } catch (error) {
       console.error('Failed to create new customer:', error);
       toast.error('Failed to create new customer. Please try again.');
@@ -87,13 +87,12 @@ const NewSale = () => {
     const existingItemIndex = saleItems.findIndex(item => item.productId === product.id);
 
     if (existingItemIndex > -1) {
-      // If product already in cart, increment quantity, but not more than stock
       setSaleItems(prev => prev.map((item, index) => {
         if (index === existingItemIndex) {
           const newQuantity = item.quantity + 1;
-          if (newQuantity > item.stock) {
-            toast.warn(`Cannot add more than ${item.stock} for ${item.name}.`);
-            return { ...item, quantity: item.stock };
+          if (newQuantity > product.stock) { // Use product.stock directly from fetched product
+            toast.warn(`Cannot add more than ${product.stock} for ${item.name}.`);
+            return { ...item, quantity: product.stock }; // Cap quantity at available stock
           }
           return { ...item, quantity: newQuantity };
         }
@@ -126,10 +125,11 @@ const NewSale = () => {
     setSaleItems(prev =>
       prev.map(item => {
         if (item.productId === productId) {
-          // Ensure quantity does not exceed available stock
-          if (quantity > item.stock) {
-            toast.warn(`Cannot add more than ${item.stock} for ${item.name}.`);
-            return { ...item, quantity: item.stock };
+          // Find the actual product object to get its current stock
+          const originalProduct = products.find(p => p.id === productId);
+          if (originalProduct && quantity > originalProduct.stock) {
+            toast.warn(`Cannot add more than ${originalProduct.stock} for ${item.name}.`);
+            return { ...item, quantity: originalProduct.stock };
           }
           return { ...item, quantity };
         }
@@ -142,7 +142,8 @@ const NewSale = () => {
     const subtotal = saleItems.reduce(
       (sum, item) => sum + (item.price * item.quantity), 0
     );
-    return Math.max(0, subtotal - discount);
+    const parsedDiscount = parseFloat(discount) || 0; // Parse discount from state
+    return Math.max(0, subtotal - parsedDiscount);
   };
 
   const handleReceiptFileSelect = (file) => {
@@ -197,7 +198,7 @@ const NewSale = () => {
         quantity: item.quantity,
         priceAtSale: item.price
       })),
-      discount: parseFloat(discount) || 0,
+      discount: parseFloat(discount) || 0, // Ensure discount is a number when sending
       paymentMethod: paymentMethod,
       paymentStatus: paymentStatus,
       totalAmount: calculateTotal(),
@@ -205,7 +206,6 @@ const NewSale = () => {
     };
 
     const formData = new FormData();
-    // Append saleData as a JSON string to a field called 'saleData'
     formData.append('saleData', JSON.stringify(saleData));
     if (receiptImageFile) {
       formData.append('receiptImage', receiptImageFile);
@@ -214,9 +214,8 @@ const NewSale = () => {
     try {
       const response = await createSale(formData);
       dispatch(addSale(response));
-      setNewlyCreatedSaleId(response.id); // Store sale ID for print prompt
-      setShowPrintPrompt(true); // Show print prompt
-      // Optionally reset form fields here if not navigating immediately
+      setNewlyCreatedSaleId(response.id);
+      setShowPrintPrompt(true);
     } catch (error) {
       console.error('Failed to record sale:', error);
       toast.error('Failed to record sale. Please try again.');
@@ -228,9 +227,8 @@ const NewSale = () => {
   const handlePrintConfirmation = (confirm) => {
     setShowPrintPrompt(false);
     if (confirm && newlyCreatedSaleId) {
-      navigate(`/sales/${newlyCreatedSaleId}`); // Navigate to sale detail page to print
+      navigate(`/sales/${newlyCreatedSaleId}`);
     } else {
-      // Optionally clear the form or navigate elsewhere if print is skipped
       // Reset all form states
       setSelectedCustomer(null);
       setIsNewCustomer(false);
@@ -238,7 +236,7 @@ const NewSale = () => {
       setCustomerSearchTerm('');
       setSaleItems([]);
       setProductSearchTerm('');
-      setDiscount(0);
+      setDiscount(''); // Reset to empty string
       setPaymentMethod('cash');
       setPaymentStatus('paid');
       setNotes('');
@@ -274,7 +272,7 @@ const NewSale = () => {
                   </div>
                 )}
                 value={customerSearchTerm}
-                onSearch={setCustomerSearchTerm} // Keep onSearch to update internal state for dropdown logic
+                onSearch={setCustomerSearchTerm}
               />
 
               {customerSearchTerm && !selectedCustomer && (
@@ -347,11 +345,15 @@ const NewSale = () => {
               renderResult={(product) => (
                 <div>
                   <p className="font-medium text-gray-800">{product.name} ({product.sku})</p>
-                  <p className="text-sm text-gray-500">{CURRENCY} {product.sellingPrice.toFixed(2)} - Stock: {product.stock}</p>
+                  <p className="text-sm text-gray-500">
+                    {CURRENCY} {product.sellingPrice.toFixed(2)} |
+                    Stock: {product.stock} |
+                    Location: {product.storageLocation || 'N/A'} {/* Added storageLocation */}
+                  </p>
                 </div>
               )}
               value={productSearchTerm}
-              onSearch={setProductSearchTerm} // Keep onSearch to update internal state for dropdown logic
+              onSearch={setProductSearchTerm}
             />
 
             {productSearchTerm && !productsLoading && products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()) || p.sku.toLowerCase().includes(productSearchTerm.toLowerCase())).length === 0 && (
@@ -415,21 +417,16 @@ const NewSale = () => {
             <div>
               <label htmlFor="discount" className="block text-sm font-medium text-gray-700 mb-2">Discount ({CURRENCY})</label>
               <input
-                type="text" // Keep as "text" to allow leading zeros visually
+                type="text"
                 id="discount"
-                value={discount} // Directly bind to the discount state.
-                                  // The state will hold either a number (e.g., 200) or an empty string ('').
-                                  // This prevents the 'e is not defined' error.
+                value={discount}
                 onChange={(e) => {
                   const rawValue = e.target.value;
-                  // Allow empty string or valid number patterns (e.g., "123", "0.5", "-10", "0", "")
                   if (rawValue === '' || /^-?\d*\.?\d*$/.test(rawValue)) {
-                    setDiscount(rawValue); // Update state with the raw string value for display
+                    setDiscount(rawValue);
                   }
                 }}
                 onBlur={(e) => {
-                  // On blur, parse the value to a float and ensure it's not negative.
-                  // If it's not a valid number, default to 0.
                   const value = parseFloat(e.target.value);
                   setDiscount(isNaN(value) || value < 0 ? 0 : value);
                 }}

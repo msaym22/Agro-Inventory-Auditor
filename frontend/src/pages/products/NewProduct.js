@@ -10,6 +10,7 @@ import { fetchProducts } from '../../features/products/productSlice';
 export const NewProduct = () => {
   const [productData, setProductData] = useState({
     name: '',
+    nameUrdu: '', // Add initial state for nameUrdu
     sellingPrice: 0,
     purchasePrice: '',
     minimumPrice: '',
@@ -73,10 +74,10 @@ export const NewProduct = () => {
         formData.append('image', imageFile);
       }
 
-      await productsAPI.createProduct(formData); // No longer need 'response' as we don't redirect to product detail
+      await productsAPI.createProduct(formData);
       toast.success('Product created successfully!');
-      dispatch(fetchProducts()); // Dispatch fetchProducts to refresh the list
-      navigate('/products'); // Corrected: Redirect to the product list page
+      dispatch(fetchProducts());
+      navigate('/products');
     } catch (error) {
       console.error('Failed to create product:', error);
       toast.error('Failed to create product. Please try again.');

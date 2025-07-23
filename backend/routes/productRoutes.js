@@ -2,11 +2,11 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const upload = require('../middleware/upload'); // Make sure upload is imported
+const uploadMiddleware = require('../middleware/upload'); // Import the upload middleware
 
 const {
   createProduct,
-  updateProduct, // Controller for updating
+  updateProduct,
   getProducts,
   getProductById,
   deleteProduct,
@@ -14,16 +14,13 @@ const {
   checkLowStock
 } = require('../controllers/productController');
 
-// Route for creating a product (already uses upload.single)
-router.post('/', auth, upload.single('image'), createProduct);
-
-// CORRECTED: Route for updating a product - apply upload.single middleware here
-router.put('/:id', auth, upload.single('image'), updateProduct); // Add upload.single('image')
-
+// Apply upload middleware directly in the route for file uploads
+router.post('/', auth, uploadMiddleware.single('image'), createProduct); // Added uploadMiddleware
+router.put('/:id', auth, uploadMiddleware.single('image'), updateProduct); // Added uploadMiddleware
 router.get('/', auth, getProducts);
 router.get('/:id', auth, getProductById);
 router.delete('/:id', auth, deleteProduct);
-router.post('/bulk', auth, bulkUpdate);
+router.post('/bulk', auth, bulkUpdate); // Assuming bulk update doesn't involve file uploads directly in its body
 router.get('/stock/low', auth, checkLowStock);
 
 module.exports = router;

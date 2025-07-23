@@ -5,7 +5,7 @@ import { formatCurrency, formatDate } from '../../utils/helpers';
 import Loading from '../../components/common/Loading';
 import InvoiceGenerator from '../../components/sales/InvoiceGenerator';
 import { Button } from '../../components/common/Button';
-import ImagePreview from '../../components/common/ImagePreview'; // Add this line
+import ImagePreview from '../../components/common/ImagePreview';
 
 export const SaleDetail = () => {
   const { id } = useParams();
@@ -34,7 +34,7 @@ export const SaleDetail = () => {
     setInvoiceLoading(true);
     try {
       const response = await salesAPI.generateInvoice(id);
-      setInvoiceData(response);
+      setInvoiceData(response); // This will now return JSON, not a Blob
     } catch (err) {
       console.error('Failed to generate invoice:', err);
       setError('Failed to generate invoice. Please try again.');
@@ -94,7 +94,8 @@ export const SaleDetail = () => {
         <div className="mt-6">
           <h2 className="text-lg font-semibold mb-2">Customer</h2>
           <p>{sale.customer?.name || 'Walk-in Customer'}</p>
-          {sale.customer?.phone && <p>Phone: {sale.customer.phone}</p>}
+          {sale.customer?.contact && <p>Contact: {sale.customer.contact}</p>}
+          {sale.customer?.address && <p>Address: {sale.customer.address}</p>}
         </div>
 
         <div className="mt-6">
@@ -110,6 +111,8 @@ export const SaleDetail = () => {
             </thead>
             <tbody>
               {sale.items.map(item => (
+                // Line 110 (approximately): The key prop is already set.
+                // For 'Whitespace text nodes' warning, ensure no extra newlines or spaces between <td> tags.
                 <tr key={item.id}>
                   <td className="border p-2">{item.product.name}</td>
                   <td className="border p-2 text-center">PKR {item.product.sellingPrice}</td>

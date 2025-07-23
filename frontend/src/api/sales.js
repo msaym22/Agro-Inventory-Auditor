@@ -48,19 +48,12 @@ export const deleteSale = async (id) => {
 
 export const generateInvoice = async (saleId) => {
   try {
-    const response = await api.get(`/sales/${saleId}/invoice`, {
-      responseType: 'blob',
-    });
-    return response.data;
+    const response = await api.get(`/sales/${saleId}/invoice`); // REMOVED: responseType: 'blob'
+    return response.data; // This will now be the parsed JSON object
   } catch (error) {
     throw error;
   }
 };
-
-// Removed getSalesAnalytics and getProductAnalytics from here
-// export const getSalesAnalytics = async (params = {}) => { /* ... */ };
-// export const getProductAnalytics = async (params = {}) => { /* ... */ };
-
 
 // Add aliases for the expected function names
 export const fetchSales = getSales;
@@ -73,7 +66,6 @@ const salesAPI = {
   updateSale,
   deleteSale,
   generateInvoice,
-  // Removed getSalesAnalytics, getProductAnalytics from here too
 };
 
 export default salesAPI;
