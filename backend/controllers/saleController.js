@@ -3,7 +3,8 @@ const { Op } = require('sequelize');
 const moment = require('moment'); // Make sure moment is installed (npm install moment)
 
 // Create a new sale
-exports.createSale = async (req, res) => {
+// Renamed from 'recordSale' to 'createSale' to match export and route definition
+exports.createSale = async (req, res) => { 
   console.log("Sale creation request received. req.body:", req.body); // Log incoming request body
   let transaction;
   try {
@@ -19,15 +20,18 @@ exports.createSale = async (req, res) => {
 
     // Validate customer and products existence before creating sale
     const customer = await Customer.findByPk(parsedSaleData.customerId, { transaction });
-    if (!customer) {
-      throw new Error('Customer not found'); // Throw error to trigger rollback
+    // Allow sale without a customer (e.g., walk-in) if customerId is null/undefined
+    if (parsedSaleData.customerId && !customer) { 
+      throw new Error('Customer not found'); 
     }
 
     const productIds = parsedSaleData.items.map(item => item.productId);
     const products = await Product.findAll({ where: { id: productIds }, transaction });
 
     if (products.length !== parsedSaleData.items.length) {
-      throw new Error('One or more product IDs are invalid or not found');
+      // This check might be too strict if some items are invalid but others are valid.
+      // Consider filtering out invalid items or returning a more specific error.
+      throw new Error('One or more product IDs in sale items are invalid or not found');
     }
 
     // Calculate total amount and prepare sale items
@@ -139,52 +143,98 @@ exports.getSales = async (req, res) => {
   const offset = (page - 1) * limit;
 
   try {
-    const whereClause = search ? {
-      [Op.or]: [
-        { '$customer.name$': { [Op.iLike]: `%${search}%` } }, // Search by customer name
-        // Allow searching by sale ID (integer) or totalAmount (float)
-        { id: parseInt(search) || 0 }, 
-        { totalAmount: parseFloat(search) || 0 }
-      ]
-    } : {};
+    const where = {};
+    const customerWhere = {};
+    const productWhere = {}; // New: for searching products within sale items
+
+    if (search) {
+      if (!isNaN(search) && parseFloat(search).toString() === search) { // Check if it's a number
+        where[Op.or] = [
+          { id: parseInt(search) }, // Search by Sale ID
+          { totalAmount: parseFloat(search) } // Search by Total Amount
+        ];
+      } else {
+        // Search by customer name (case-insensitive)
+        customerWhere.name = { [Op.iLike]: `%${search}%` };
+        // Search by product name (case-insensitive)
+        productWhere.name = { [Op.iLike]: `%${search}%` };
+      }
+    }
+
+    if (req.query.customerId) { // Filter by specific customer ID if provided
+      where.customerId = req.query.customerId;
+    }
+
+    if (req.query.startDate && req.query.endDate) {
+      where.saleDate = {
+        [Op.between]: [
+          moment(req.query.startDate).startOf('day').toDate(),
+          moment(req.query.endDate).endOf('day').toDate()
+        ]
+      };
+    } else if (req.query.startDate) {
+      where.saleDate = { [Op.gte]: moment(req.query.startDate).startOf('day').toDate() };
+    } else if (req.query.endDate) {
+      where.saleDate = { [Op.lte]: moment(req.query.endDate).endOf('day').toDate() };
+    }
+
+    const includeOptions = [
+      {
+        model: Customer,
+        as: 'customer',
+        attributes: ['id', 'name', 'contact', 'address'],
+        where: Object.keys(customerWhere).length > 0 ? customerWhere : undefined,
+        required: Object.keys(customerWhere).length > 0 // INNER JOIN if customer search is active
+      },
+      {
+        model: SaleItem,
+        as: 'items',
+        attributes: ['quantity', 'priceAtSale'],
+        include: [
+          {
+            model: Product,
+            as: 'product',
+            attributes: ['id', 'name', 'nameUrdu', 'sellingPrice'],
+            where: Object.keys(productWhere).length > 0 ? productWhere : undefined,
+            required: Object.keys(productWhere).length > 0 // INNER JOIN if product search is active
+          }
+        ],
+        required: Object.keys(productWhere).length > 0 // INNER JOIN if product search is active
+      }
+    ];
+
+    // If no specific customer or product search, make includes LEFT OUTER JOINs to not filter out sales
+    if (Object.keys(customerWhere).length === 0) {
+      includeOptions[0].required = false; // LEFT OUTER JOIN for customer
+    }
+    if (Object.keys(productWhere).length === 0) {
+      includeOptions[1].required = false; // LEFT OUTER JOIN for items
+      includeOptions[1].include[0].required = false; // LEFT OUTER JOIN for product within items
+    }
+
 
     const { count, rows } = await Sale.findAndCountAll({
-      where: whereClause,
-      limit,
-      offset,
+      where,
       order: [['saleDate', 'DESC']],
-      include: [
-        {
-          model: Customer,
-          as: 'customer',
-          attributes: ['id', 'name', 'contact', 'address'] // Include more customer attributes if needed by frontend
-        },
-        {
-          model: SaleItem,
-          as: 'items',
-          include: [
-            {
-              model: Product,
-              as: 'product',
-              attributes: ['id', 'name', 'nameUrdu', 'sellingPrice'] // Ensure nameUrdu is included here
-            }
-          ]
-        }
-      ]
+      limit: parseInt(limit),
+      offset: offset,
+      include: includeOptions
     });
+
+    const totalPages = Math.ceil(count / limit);
 
     res.json({
       sales: rows, // Ensure this is 'sales' for the frontend's fetchSales.fulfilled
       pagination: {
-        currentPage: page,
-        totalPages: Math.ceil(count / limit),
         totalItems: count,
-        itemsPerPage: limit
+        totalPages,
+        currentPage: parseInt(page),
+        itemsPerPage: parseInt(limit)
       }
     });
-  } catch (error) {
-    console.error('Error fetching sales:', error);
-    res.status(500).json({ error: 'Failed to fetch sales', details: error.message });
+  } catch (err) {
+    console.error('Failed to fetch sales:', err); // Log full error object
+    res.status(500).json({ error: 'Failed to fetch sales', details: err.message });
   }
 };
 
