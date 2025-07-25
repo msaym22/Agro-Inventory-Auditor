@@ -1,8 +1,8 @@
 // backend/routes/productRoutes.js
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
-const uploadMiddleware = require('../middleware/upload'); // Import the upload middleware
+const { protect } = require('../middleware/auth'); // CORRECTED IMPORT
+const uploadMiddleware = require('../middleware/upload'); 
 
 const {
   createProduct,
@@ -14,13 +14,13 @@ const {
   checkLowStock
 } = require('../controllers/productController');
 
-// Apply upload middleware directly in the route for file uploads
-router.post('/', auth, uploadMiddleware.single('image'), createProduct); // Added uploadMiddleware
-router.put('/:id', auth, uploadMiddleware.single('image'), updateProduct); // Added uploadMiddleware
-router.get('/', auth, getProducts);
-router.get('/:id', auth, getProductById);
-router.delete('/:id', auth, deleteProduct);
-router.post('/bulk', auth, bulkUpdate); // Assuming bulk update doesn't involve file uploads directly in its body
-router.get('/stock/low', auth, checkLowStock);
+// Apply middleware correctly
+router.post('/', protect, uploadMiddleware.single('image'), createProduct); 
+router.put('/:id', protect, uploadMiddleware.single('image'), updateProduct); 
+router.get('/', protect, getProducts);
+router.get('/:id', protect, getProductById);
+router.delete('/:id', protect, deleteProduct);
+router.post('/bulk', protect, bulkUpdate);
+router.get('/stock/low', protect, checkLowStock);
 
 module.exports = router;

@@ -1,4 +1,5 @@
-const { Customer } = require('../models');
+// ✅ CORRECTED: Added Sale, SaleItem, and Product to the import
+const { Customer, Sale, SaleItem, Product } = require('../models'); 
 const { Op } = require('sequelize');
 
 // Get all customers with pagination and search
@@ -42,7 +43,24 @@ exports.getCustomers = async (req, res) => {
 // Get a single customer by ID
 exports.getCustomerById = async (req, res) => {
   try {
-    const customer = await Customer.findByPk(req.params.id);
+    const customer = await Customer.findByPk(req.params.id, {
+      include: [
+        {
+          model: Sale,
+          as: 'sales',
+          include: [
+            {
+              model: SaleItem,
+              as: 'items',
+              include: [{ model: Product, as: 'product' }]
+            }
+          ]
+        }
+      ],
+      order: [
+        [{ model: Sale, as: 'sales' }, 'saleDate', 'DESC']
+      ]
+    });
     if (!customer) {
       return res.status(404).json({ error: 'Customer not found' });
     }
@@ -55,14 +73,13 @@ exports.getCustomerById = async (req, res) => {
 
 // Create a new customer
 exports.createCustomer = async (req, res) => {
-  console.log("Customer creation request received. req.body:", req.body); // IMPORTANT LOG
+  console.log("Customer creation request received. req.body:", req.body);
   try {
     const customer = await Customer.create(req.body);
-    console.log("Customer created successfully:", customer); // IMPORTANT LOG
+    console.log("Customer created successfully:", customer);
     return res.status(201).json(customer);
   } catch (error) {
-    console.error("Error creating customer in backend:", error); // IMPORTANT LOG
-    // More detailed error response for debugging
+    console.error("Error creating customer in backend:", error);
     if (error.name === 'SequelizeValidationError') {
       return res.status(400).json({ error: 'Validation failed', details: error.errors.map(e => e.message) });
     }
@@ -78,14 +95,14 @@ exports.updateCustomer = async (req, res) => {
   try {
     const [updatedRows] = await Customer.update(req.body, {
       where: { id: req.params.id },
-      returning: true // Return the updated row
+      returning: true
     });
 
     if (updatedRows === 0) {
       return res.status(404).json({ error: 'Customer not found' });
     }
 
-    const updatedCustomer = await Customer.findByPk(req.params.id); // Fetch the updated customer
+    const updatedCustomer = await Customer.findByPk(req.params.id);
     res.json(updatedCustomer);
   } catch (error) {
     console.error('Error updating customer:', error);
@@ -102,7 +119,7 @@ exports.updateCustomerBalance = async (req, res) => {
       return res.status(404).json({ error: 'Customer not found' });
     }
 
-    customer.outstandingBalance = outstandingBalance; // Or add/subtract as needed
+    customer.outstandingBalance = outstandingBalance;
     await customer.save();
     res.json(customer);
   } catch (error) {
@@ -111,7 +128,7 @@ exports.updateCustomerBalance = async (req, res) => {
   }
 };
 
-// Delete a customer by ID (NEW)
+// Delete a customer by ID
 exports.deleteCustomer = async (req, res) => {
   try {
     const deletedRows = await Customer.destroy({
@@ -122,7 +139,7 @@ exports.deleteCustomer = async (req, res) => {
       return res.status(404).json({ error: 'Customer not found' });
     }
 
-    res.status(204).send(); // No content for successful deletion
+    res.status(204).send();
   } catch (error) {
     console.error('Error deleting customer:', error);
     res.status(500).json({ error: 'Failed to delete customer' });

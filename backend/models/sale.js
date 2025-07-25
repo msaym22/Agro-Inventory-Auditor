@@ -35,6 +35,10 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'saleId',
       as: 'items' // 'items' will now refer to associated SaleItem records
     });
+    models.Sale.hasMany(models.Payment, {
+      foreignKey: 'saleId',
+      as: 'payments'
+    });
   };
 
   return Sale;

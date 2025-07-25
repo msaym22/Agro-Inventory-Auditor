@@ -1,7 +1,17 @@
-const jwt = require('jsonwebtoken');
-const { User } = require('../models');
+// backend/middleware/auth.js
 
-module.exports = (req, res, next) => {
-  req.user = { id: 1, username: 'guest', role: 'admin' };
+/**
+ * Dummy middleware to bypass authentication.
+ * It does nothing but call next() to proceed to the next handler.
+ */
+const protect = (req, res, next) => {
+  // This middleware is currently set to bypass login.
+  // The request will proceed without any user authentication.
   next();
+};
+
+// Export the dummy 'protect' function correctly.
+// This is the part that fixes the server crash.
+module.exports = {
+  protect,
 };

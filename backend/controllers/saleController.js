@@ -3,14 +3,13 @@ const { Op } = require('sequelize');
 const moment = require('moment'); // Make sure moment is installed (npm install moment)
 
 // Create a new sale
-// Renamed from 'recordSale' to 'createSale' to match export and route definition
-exports.createSale = async (req, res) => { 
+exports.createSale = async (req, res) => {
   console.log("Sale creation request received. req.body:", req.body); // Log incoming request body
   let transaction;
   try {
     // Assuming saleData is sent as a JSON string in a 'saleData' field of FormData
     // And receiptImage (if any) is in req.file
-    const { saleData } = req.body; 
+    const { saleData } = req.body;
     const parsedSaleData = JSON.parse(saleData);
     console.log("Parsed Sale Data:", parsedSaleData); // Log parsed data
 
@@ -21,8 +20,8 @@ exports.createSale = async (req, res) => {
     // Validate customer and products existence before creating sale
     const customer = await Customer.findByPk(parsedSaleData.customerId, { transaction });
     // Allow sale without a customer (e.g., walk-in) if customerId is null/undefined
-    if (parsedSaleData.customerId && !customer) { 
-      throw new Error('Customer not found'); 
+    if (parsedSaleData.customerId && !customer) {
+      throw new Error('Customer not found');
     }
 
     const productIds = parsedSaleData.items.map(item => item.productId);
@@ -40,7 +39,7 @@ exports.createSale = async (req, res) => {
 
     for (const item of parsedSaleData.items) {
       const product = products.find(p => p.id === item.productId);
-      
+
       if (item.quantity > product.stock) {
         throw new Error(`Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
       }
@@ -87,7 +86,7 @@ exports.createSale = async (req, res) => {
     }
 
     // Update customer's outstanding balance if payment method is credit and not fully paid
-    if (parsedSaleData.paymentMethod === 'credit' && parsedSaleData.paymentStatus !== 'paid') {
+    if (parsedSaleData.paymentMethod === 'credit' && parsedSaleData.paymentStatus !== 'paid' && customer) {
       customer.outstandingBalance = (customer.outstandingBalance || 0) + finalTotalAmount;
       await customer.save({ transaction });
     }
@@ -285,9 +284,6 @@ exports.updateSale = async (req, res) => {
       return res.status(404).json({ error: 'Sale not found' });
     }
 
-    // If items are provided, update them. This assumes a full replacement or specific updates.
-    // For simplicity, we might delete existing items and recreate, or compare and update.
-    // A more robust solution would handle diffing.
     if (items && items.length > 0) {
       await SaleItem.destroy({ where: { saleId: id }, transaction }); // Delete old items
       for (const item of items) {
@@ -298,13 +294,11 @@ exports.updateSale = async (req, res) => {
           priceAtSale: item.priceAtSale // Use priceAtSale from frontend
         }, { transaction });
 
-        // Update product stock (consider previous stock vs new stock)
+        // This is a simplified stock update. For a real system, you'd need to calculate
+        // the difference between old and new quantities for the product.
         const product = await Product.findByPk(item.productId, { transaction });
         if (product) {
-          // This is a simplified stock update. For a real system, you'd need to calculate
-          // the difference between old and new quantities for the product.
-          // For now, it assumes a fresh stock deduction.
-          product.stock -= item.quantity; 
+          product.stock -= item.quantity;
           await product.save({ transaction });
         }
       }
@@ -368,13 +362,69 @@ exports.deleteSale = async (req, res) => {
   }
 };
 
+// Fetches data for a single invoice and sends it to the frontend
+exports.generateInvoice = async (req, res) => {
+  try {
+    const sale = await Sale.findByPk(req.params.id, {
+      include: [
+        {
+          model: Customer,
+          as: 'customer',
+          attributes: ['id', 'name', 'contact', 'address', 'outstandingBalance']
+        },
+        {
+          model: SaleItem,
+          as: 'items',
+          include: [{
+            model: Product,
+            as: 'product',
+            attributes: ['id', 'name', 'sellingPrice', 'nameUrdu']
+          }]
+        }
+      ]
+    });
+
+    if (sale) {
+      // The frontend expects a specific data structure. We format it here.
+      const invoiceData = {
+        invoiceId: sale.id,
+        customerName: sale.customer ? sale.customer.name : 'Walk-in Customer',
+        customerPhone: sale.customer ? sale.customer.contact : 'N/A',
+        customerAddress: sale.customer ? sale.customer.address : 'N/A',
+        date: sale.saleDate,
+        paymentMethod: sale.paymentMethod,
+        paymentStatus: sale.paymentStatus,
+        subTotal: sale.subTotal,
+        discount: sale.discount,
+        grandTotal: sale.totalAmount,
+        notes: sale.notes,
+        items: sale.items.map(item => ({
+          id: item.id,
+          productName: item.product.name,
+          productNameUrdu: item.product.nameUrdu,
+          quantity: item.quantity,
+          unitPrice: item.priceAtSale,
+          total: item.quantity * item.priceAtSale,
+        })),
+      };
+      res.json(invoiceData);
+    } else {
+      res.status(404).json({ error: 'Sale not found' });
+    }
+  } catch (err) {
+    console.error('Server error fetching invoice data:', err);
+    res.status(500).json({ error: 'Server error', details: err.message });
+  }
+};
 
 // Export all functions
 module.exports = {
-  createSale: exports.createSale, // Explicitly export createSale
+  createSale: exports.createSale,
   getSales: exports.getSales,
   getSaleById: exports.getSaleById,
   updateSale: exports.updateSale,
   deleteSale: exports.deleteSale,
-  generateInvoice: exports.generateInvoice, // Assuming generateInvoice is defined elsewhere in this file
+  generateInvoice: exports.generateInvoice,
 };
+
+console.log('--- saleController.js has been loaded. Exports:', module.exports);

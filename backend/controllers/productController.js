@@ -1,29 +1,21 @@
+// backend/controllers/productController.js
 const { Product } = require('../models');
 const { Op } = require('sequelize');
-const upload = require('../middleware/upload'); // Assuming upload middleware is needed for receiptImage
-const { logAudit } = require('./auditController');
 
 const createProduct = async (req, res) => {
   try {
-    upload(req, res, async (err) => {
-      if (err) {
-        return res.status(400).json({ error: err.message || 'File upload failed' });
-      }
+    const productData = req.body;
 
-      const productData = req.body;
+    if (req.file) {
+      productData.image = req.file.path;
+    }
 
-      if (req.file) {
-        productData.image = req.file.path;
-      }
+    const product = await Product.create(productData);
 
-      // Sequelize will automatically pick up 'nameUrdu' if it's in productData
-      const product = await Product.create(productData);
+    // TODO: Add audit log if needed
+    // await logAudit('Product', product.id, 'create', productData, req.user.id);
 
-      // Log audit trail if auditController is available
-      // await logAudit('Product', product.id, 'create', productData, req.user.id);
-
-      res.status(201).json(product);
-    });
+    res.status(201).json(product);
   } catch (err) {
     console.error('Product creation failed:', err);
     res.status(500).json({ error: 'Product creation failed', details: err.message });
@@ -32,33 +24,23 @@ const createProduct = async (req, res) => {
 
 const updateProduct = async (req, res) => {
   try {
-    upload(req, res, async (err) => {
-      if (err) {
-        return res.status(400).json({ error: err.message || 'File upload failed' });
-      }
+    const productData = req.body;
 
-      const productData = req.body;
-      const oldProduct = await Product.findByPk(req.params.id);
+    if (req.file) {
+      productData.image = req.file.path;
+    }
 
-      if (req.file) {
-        productData.image = req.file.path;
-      }
-
-      // Sequelize will automatically update 'nameUrdu' if it's in productData
-      const [updated] = await Product.update(productData, {
-        where: { id: req.params.id }
-      });
-
-      if (updated) {
-        const newProduct = await Product.findByPk(req.params.id);
-        // Log audit trail if auditController is available
-        // const changes = { old: oldProduct.toJSON(), new: newProduct.toJSON() };
-        // await logAudit('Product', req.params.id, 'update', changes, req.user.id);
-        res.json(newProduct);
-      } else {
-        res.status(404).json({ error: 'Product not found' });
-      }
+    const [updated] = await Product.update(productData, {
+      where: { id: req.params.id }
     });
+
+    if (updated) {
+      const updatedProduct = await Product.findByPk(req.params.id);
+      // TODO: Add audit log if needed
+      res.json(updatedProduct);
+    } else {
+      res.status(404).json({ error: 'Product not found' });
+    }
   } catch (err) {
     console.error('Product update failed:', err);
     res.status(500).json({ error: 'Update failed', details: err.message });
@@ -71,12 +53,10 @@ const getProducts = async (req, res) => {
   const where = {};
 
   if (search) {
-    where.name = { [Op.iLike]: `%${search}%` };
-    // Optionally search by nameUrdu as well
-    // where[Op.or] = [
-    //   { name: { [Op.iLike]: `%${search}%` } },
-    //   { nameUrdu: { [Op.iLike]: `%${search}%` } }
-    // ];
+    where[Op.or] = [
+      { name: { [Op.iLike]: `%${search}%` } },
+      { nameUrdu: { [Op.iLike]: `%${search}%` } }
+    ];
   }
 
   if (category) {
@@ -145,8 +125,7 @@ const deleteProduct = async (req, res) => {
     });
 
     if (deleted) {
-      // Log audit trail if auditController is available
-      // await logAudit('Product', req.params.id, 'delete', product.toJSON(), req.user.id);
+      // TODO: Add audit log if needed
       res.status(204).send();
     } else {
       res.status(404).json({ error: 'Product not found' });

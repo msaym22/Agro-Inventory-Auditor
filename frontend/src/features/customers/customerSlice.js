@@ -1,52 +1,75 @@
-// src/features/customers/customerSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { getCustomers, getCustomerById, createCustomer, updateCustomer, updateCustomerBalance, deleteCustomer } from '../../api/customers'; // Import deleteCustomer
+import { getCustomers, getCustomerById, createCustomer, updateCustomer, updateCustomerBalance, deleteCustomer } from '../../api/customers';
 
 export const fetchCustomers = createAsyncThunk(
   'customers/fetchCustomers',
-  async (params = {}) => {
-    const response = await getCustomers(params);
-    return response;
+  async (params = {}, { rejectWithValue }) => {
+    try {
+      const response = await getCustomers(params);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response.data);
+    }
   }
 );
 
 export const fetchCustomerById = createAsyncThunk(
   'customers/fetchCustomerById',
-  async (id) => {
-    const response = await getCustomerById(id);
-    return response;
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await getCustomerById(id);
+      return response;
+    } catch (error) {
+      return rejectWithValue(error.response.data);
+    }
   }
 );
 
 export const addNewCustomer = createAsyncThunk(
   'customers/addNewCustomer',
-  async (customerData) => {
-    const response = await createCustomer(customerData);
-    return response;
+  async (customerData, { rejectWithValue }) => {
+    try {
+        const response = await createCustomer(customerData);
+        return response;
+    } catch (error) {
+        return rejectWithValue(error.response.data);
+    }
   }
 );
 
 export const updateExistingCustomer = createAsyncThunk(
   'customers/updateExistingCustomer',
-  async ({ id, customerData }) => {
-    const response = await updateCustomer(id, customerData);
-    return response;
+  async ({ id, customerData }, { rejectWithValue }) => {
+    try {
+        const response = await updateCustomer(id, customerData);
+        return response;
+    } catch (error) {
+        return rejectWithValue(error.response.data);
+    }
   }
 );
 
 export const updateCustomerBalanceAction = createAsyncThunk(
   'customers/updateCustomerBalance',
-  async ({ id, balanceData }) => {
-    const response = await updateCustomerBalance(id, balanceData);
-    return response;
+  async ({ id, balanceData }, { rejectWithValue }) => {
+    try {
+        const response = await updateCustomerBalance(id, balanceData);
+        return response;
+    } catch (error) {
+        return rejectWithValue(error.response.data);
+    }
   }
 );
 
-export const removeCustomer = createAsyncThunk( // New: removeCustomer thunk
+export const removeCustomer = createAsyncThunk(
   'customers/removeCustomer',
-  async (id) => {
-    await deleteCustomer(id); // Call the API to delete
-    return id; // Return the ID of the deleted customer
+  async (id, { rejectWithValue }) => {
+    try {
+        await deleteCustomer(id);
+        return id;
+    } catch (error) {
+        return rejectWithValue(error.response.data);
+    }
   }
 );
 
@@ -89,7 +112,7 @@ const customerSlice = createSlice({
       })
       .addCase(fetchCustomers.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.error.message;
+        state.error = action.payload?.error || action.error.message;
       })
       .addCase(fetchCustomerById.pending, (state) => {
         state.loading = true;
@@ -101,7 +124,7 @@ const customerSlice = createSlice({
       })
       .addCase(fetchCustomerById.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.error.message;
+        state.error = action.payload?.error || action.error.message;
       })
       .addCase(addNewCustomer.pending, (state) => {
         state.loading = true;
@@ -109,16 +132,19 @@ const customerSlice = createSlice({
       })
       .addCase(addNewCustomer.fulfilled, (state, action) => {
         state.loading = false;
-        state.customers.push(action.payload);
+        state.customers.unshift(action.payload);
       })
       .addCase(addNewCustomer.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.error.message;
+        state.error = action.payload?.error || action.error.message;
       })
       .addCase(updateExistingCustomer.fulfilled, (state, action) => {
         const index = state.customers.findIndex(c => c.id === action.payload.id);
         if (index !== -1) {
           state.customers[index] = action.payload;
+        }
+        if (state.currentCustomer && state.currentCustomer.id === action.payload.id) {
+          state.currentCustomer = action.payload;
         }
       })
       .addCase(updateCustomerBalanceAction.fulfilled, (state, action) => {
@@ -126,8 +152,11 @@ const customerSlice = createSlice({
         if (index !== -1) {
           state.customers[index] = action.payload;
         }
+         if (state.currentCustomer && state.currentCustomer.id === action.payload.id) {
+          state.currentCustomer = action.payload;
+        }
       })
-      .addCase(removeCustomer.fulfilled, (state, action) => { // New: Handle successful removal
+      .addCase(removeCustomer.fulfilled, (state, action) => {
         state.customers = state.customers.filter(c => c.id !== action.payload);
       });
   },

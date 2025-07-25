@@ -34,7 +34,7 @@ export const SaleDetail = () => {
     setInvoiceLoading(true);
     try {
       const response = await salesAPI.generateInvoice(id);
-      setInvoiceData(response); // This will now return JSON, not a Blob
+      setInvoiceData(response);
     } catch (err) {
       console.error('Failed to generate invoice:', err);
       setError('Failed to generate invoice. Please try again.');
@@ -111,8 +111,6 @@ export const SaleDetail = () => {
             </thead>
             <tbody>
               {sale.items.map(item => (
-                // Line 110 (approximately): The key prop is already set.
-                // For 'Whitespace text nodes' warning, ensure no extra newlines or spaces between <td> tags.
                 <tr key={item.id}>
                   <td className="border p-2">{item.product.name}</td>
                   <td className="border p-2 text-center">PKR {item.product.sellingPrice}</td>

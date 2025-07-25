@@ -1,21 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const { protect } = require('../middleware/auth'); // Correctly import the 'protect' function
 const {
   getSalesAnalytics,
-  getOverallProfit, // Import new function
-  getProfitByProduct, // Import new function
-  getSalesByCustomerWithQuantity, // Import new function
+  getOverallProfit,
+  getProfitByProduct,
+  getSalesByCustomerWithQuantity,
   getInventoryValuation,
   getMonthlySalesReport,
 } = require('../controllers/analyticsController');
 
-router.get('/sales', auth, getSalesAnalytics);
-router.get('/profit/overall', auth, getOverallProfit); // New route
-router.get('/profit/by-product', auth, getProfitByProduct); // New route
-router.get('/sales/by-customer-quantity', auth, getSalesByCustomerWithQuantity); // New route
-router.get('/inventory-valuation', auth, getInventoryValuation);
-router.get('/monthly-sales-report', auth, getMonthlySalesReport);
-
+// Correctly apply the 'protect' middleware to each route
+router.get('/sales', protect, getSalesAnalytics);
+router.get('/profit/overall', protect, getOverallProfit);
+router.get('/profit/by-product', protect, getProfitByProduct);
+router.get('/sales/by-customer-quantity', protect, getSalesByCustomerWithQuantity);
+router.get('/inventory-valuation', protect, getInventoryValuation);
+router.get('/monthly-sales-report', protect, getMonthlySalesReport);
 
 module.exports = router;

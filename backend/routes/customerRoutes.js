@@ -1,28 +1,27 @@
 const express = require('express');
 const router = express.Router();
 const customerController = require('../controllers/customerController');
-const authMiddleware = require('../middleware/auth'); // Assuming you want auth for delete
-const upload = require('../middleware/upload'); // If customer images are ever needed, although not current
+const { protect } = require('../middleware/auth'); // Correctly import the 'protect' function
 
-// Apply authentication middleware to all customer routes that require it
-router.use(authMiddleware);
+// Apply the 'protect' middleware to each route that needs it.
+// The line 'router.use(authMiddleware)' has been removed.
 
 // Get all customers with pagination and search
-router.get('/', customerController.getCustomers);
+router.get('/', protect, customerController.getCustomers);
 
 // Get a single customer by ID
-router.get('/:id', customerController.getCustomerById);
+router.get('/:id', protect, customerController.getCustomerById);
 
 // Create a new customer
-router.post('/', customerController.createCustomer);
+router.post('/', protect, customerController.createCustomer);
 
 // Update a customer by ID
-router.put('/:id', customerController.updateCustomer);
+router.put('/:id', protect, customerController.updateCustomer);
 
 // Update customer balance by ID (PATCH for partial update)
-router.patch('/:id/balance', customerController.updateCustomerBalance);
+router.patch('/:id/balance', protect, customerController.updateCustomerBalance);
 
-// Delete a customer by ID (NEW)
-router.delete('/:id', customerController.deleteCustomer);
+// Delete a customer by ID
+router.delete('/:id', protect, customerController.deleteCustomer);
 
 module.exports = router;

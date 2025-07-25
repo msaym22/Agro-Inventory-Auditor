@@ -4,15 +4,20 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING,
       allowNull: false
     },
-    nameUrdu: { // <--- ADDED FOR URDU NAME
+    nameUrdu: {
       type: DataTypes.STRING,
-      allowNull: true // Allow null if not all products will have an Urdu name
+      allowNull: true 
     },
     sellingPrice: {
       type: DataTypes.FLOAT,
       allowNull: false
     },
-    purchasePrice: DataTypes.FLOAT,
+    // ✅ CORRECTED THIS ENTIRE BLOCK
+    purchasePrice: {
+      type: DataTypes.FLOAT,
+      allowNull: false, // Enforce that this field cannot be null
+      defaultValue: 0,  // If no value is sent, use 0 by default
+    },
     minimumPrice: DataTypes.FLOAT,
     image: DataTypes.STRING,
     description: DataTypes.TEXT,
