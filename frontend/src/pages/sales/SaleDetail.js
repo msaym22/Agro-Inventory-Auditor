@@ -1,6 +1,7 @@
+// frontend/src/pages/sales/SaleDetail.js
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import salesAPI from '../../api/sales';
+import salesAPI from '../../api/sales'; // Your direct API calls
 import { formatCurrency, formatDate } from '../../utils/helpers';
 import Loading from '../../components/common/Loading';
 import InvoiceGenerator from '../../components/sales/InvoiceGenerator';
@@ -110,8 +111,9 @@ export const SaleDetail = () => {
               </tr>
             </thead>
             <tbody>
-              {sale.items.map(item => (
-                <tr key={item.id}>
+              {/* FIX: Using item.id as key, with fallback to index */}
+              {sale.items.map((item, index) => (
+                <tr key={item.id || index}> {/* Use item.id or fallback to index */}
                   <td className="border p-2">{item.product.name}</td>
                   <td className="border p-2 text-center">PKR {item.product.sellingPrice}</td>
                   <td className="border p-2 text-center">{item.quantity}</td>

@@ -2,21 +2,28 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { createSale } from '../../api/sales'; // Assuming this is your API call to create a sale
 import { toast } from 'react-toastify';
-import { addSale } from '../../features/sales/saleSlice'; // Action to add sale to Redux state
+
+// Components
 import { Button } from '../../components/common/Button';
 import FileUpload from '../../components/common/FileUpload';
 import ImagePreview from '../../components/common/ImagePreview';
 import Loading from '../../components/common/Loading';
-import config from '../../config/config';
-
-// Import customer and product related thunks and components
-import { fetchCustomers, addNewCustomer } from '../../features/customers/customerSlice';
-import { fetchProducts } from '../../features/products/productSlice';
-import CustomerForm from '../../components/customers/CustomerForm'; // This form is used for new customer details
+import CustomerForm from '../../components/customers/CustomerForm'; 
 import SearchInput from '../../components/common/SearchInput';
-import InvoiceGenerator from '../../components/sales/InvoiceGenerator'; // Import for print functionality
+import InvoiceGenerator from '../../components/sales/InvoiceGenerator'; 
+import Modal from '../../components/common/Modal'; // Ensure this Modal.js file exists
+
+// API calls directly (as per your current setup and to resolve previous import issues)
+import { createSale as createSaleApi } from '../../api/sales'; // Alias to avoid conflict if a thunk also exists
+import { createCustomer as createCustomerApi } from '../../api/customers'; // Alias to avoid conflict
+
+// Redux Thunks and Actions
+import { fetchProducts } from '../../features/products/productSlice';
+import { fetchCustomers, addNewCustomer } from '../../features/customers/customerSlice'; // addNewCustomer is a plain action here
+import { addSale } from '../../features/sales/saleSlice'; // addSale is a plain action here
+
+import config from '../../config/config';
 
 const { CURRENCY } = config;
 
@@ -24,47 +31,83 @@ const NewSale = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  // Redux states for customers and products
-  const customers = useSelector(state => state.customers.customers);
-  const customersLoading = useSelector(state => state.customers.loading);
-  const products = useSelector(state => state.products.products);
-  const productsLoading = useSelector(state => state.products.loading);
-
+  // Redux states for data fetching and loading
+  const { products, loading: productsLoading, error: productsError } = useSelector((state) => state.products);
+  const { customers, loading: customersLoading, error: customersError } = useSelector((state) => state.customers);
+  const { loading: saleCreating, error: saleError } = useSelector((state) => state.sales);
+  
+  // Local state for customer creation management during form submission
+  const [customerCreating, setCustomerCreating] = useState(false); 
+  const [customerCreateError, setCustomerCreateError] = useState(null);
+  
   // Sale related states
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [isNewCustomer, setIsNewCustomer] = useState(false);
-  const [newCustomerData, setNewCustomerData] = useState({ name: '', contact: '', address: '', creditLimit: 0, outstandingBalance: 0 });
-  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
-
+  // State to hold data for a *new* customer not yet saved to backend
+  const [newUnsavedCustomerData, setNewUnsavedCustomerData] = useState({ name: '', contact: '', address: '', creditLimit: 0 });
+  const [isNewCustomerMode, setIsNewCustomerMode] = useState(false); // Indicates if selectedCustomer is a new, unsaved one
+  
   const [saleItems, setSaleItems] = useState([]);
-  const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [productSearchTerm, setProductSearchTerm] = useState(''); 
 
-  const [discount, setDiscount] = useState(''); // Changed to string for display flexibility
+  const [discount, setDiscount] = useState(''); 
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentStatus, setPaymentStatus] = useState('paid');
   const [notes, setNotes] = useState('');
   const [receiptImageFile, setReceiptImageFile] = useState(null);
   const [receiptImagePreviewUrl, setReceiptImagePreviewUrl] = useState(null);
-  const [loading, setLoading] = useState(false); // For sale submission
+  const [loading, setLoading] = useState(false); // Overall loading state for form submission
   const [showPrintPrompt, setShowPrintPrompt] = useState(false);
-  const [newlyCreatedSaleData, setNewlyCreatedSaleData] = useState(null); // Store full sale data for InvoiceGenerator
+  const [newlyCreatedSaleData, setNewlyCreatedSaleData] = useState(null); 
+  
+  // State for new customer modal visibility
+  const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
+  const [customerSearchTerm, setCustomerSearchTerm] = useState(''); 
 
-  // Fetch customers and products on component mount
+  // Fetch initial data on component mount
   useEffect(() => {
     dispatch(fetchCustomers());
     dispatch(fetchProducts());
   }, [dispatch]);
 
+  // Handle new customer creation error (if it happens during direct API call in handleSubmitSale)
+  useEffect(() => {
+    if (customerCreateError) { 
+      toast.error(`Error creating new customer: ${customerCreateError}`);
+    }
+  }, [customerCreateError]);
+
+
   const handleCustomerSelect = (customer) => {
     setSelectedCustomer(customer);
     setCustomerSearchTerm(customer ? customer.name : '');
-    setIsNewCustomer(false);
-    setNewCustomerData({ name: '', contact: '', address: '', creditLimit: 0, outstandingBalance: 0 }); // Clear new customer data
+    setIsNewCustomerMode(false); // Not in new customer mode if an existing one is selected
+    setNewUnsavedCustomerData({ name: '', contact: '', address: '', creditLimit: 0 }); // Clear unsaved data
   };
 
-  const handleNewCustomerChange = (e) => {
-    const { name, value } = e.target;
-    setNewCustomerData(prev => ({ ...prev, [name]: value }));
+  // This handler now correctly expects the updated form data object directly
+  const handleNewUnsavedCustomerDataChange = (updatedFormData) => { 
+    setNewUnsavedCustomerData(updatedFormData); // Set the entire updated object
+  };
+
+  // Function to "save" the new customer data temporarily from modal
+  const handleSaveNewCustomerFromModal = () => {
+    if (!newUnsavedCustomerData.name.trim()) { 
+      toast.error('Customer name is required.');
+      return;
+    }
+    // Set the new customer data to selectedCustomer for the sale, mark as new
+    setSelectedCustomer({
+      id: null, // No ID yet as not saved to backend
+      name: newUnsavedCustomerData.name,
+      contact: newUnsavedCustomerData.contact,
+      address: newUnsavedCustomerData.address,
+      creditLimit: newUnsavedCustomerData.creditLimit,
+      outstandingBalance: 0, // Default for new customer
+    });
+    setIsNewCustomerMode(true); // Indicate that selectedCustomer is a new, unsaved one
+    setCustomerSearchTerm(newUnsavedCustomerData.name); // Show new customer name in search input field
+    setShowNewCustomerModal(false); // Close the modal
+    toast.info('New customer details captured. Click "Record Sale" to save them along with the sale.');
   };
 
   const addProductToSale = (product) => {
@@ -91,11 +134,11 @@ const NewSale = () => {
           price: product.sellingPrice,
           quantity: 1,
           stock: product.stock,
-          nameUrdu: product.nameUrdu // Include nameUrdu for invoice generation
+          nameUrdu: product.nameUrdu 
         }
       ]);
     }
-    setProductSearchTerm('');
+    setProductSearchTerm(''); 
   };
 
   const removeItem = (productId) => {
@@ -141,44 +184,63 @@ const NewSale = () => {
     }
   };
 
+  // Handles submission of the main sale form
   const handleSubmitSale = async (e) => {
     e.preventDefault();
-    setLoading(true); // Start loading for the entire submission process
+
+    // FIX: Add this defensive check at the very top to prevent execution if already loading
+    if (loading) {
+      console.warn('Form already submitting, ignoring duplicate click.');
+      return;
+    }
+
+    setLoading(true); // Start overall loading for the submission process
 
     let customerIdToUse = selectedCustomer?.id;
-    let finalCustomerName = selectedCustomer?.name; // For invoice display
+    let finalCustomerName = selectedCustomer?.name; 
     let finalCustomerContact = selectedCustomer?.contact;
     let finalCustomerAddress = selectedCustomer?.address;
 
-    // Problem 1 & 3 Solution: Handle new customer creation within sale submission
-    if (isNewCustomer) {
-      if (!newCustomerData.name.trim()) { // Validate new customer name
-        toast.error('Customer name is required to create a new customer.');
-        setLoading(false);
+    // Condition: Create new customer if in new customer mode and ID is null (not yet saved)
+    if (isNewCustomerMode && selectedCustomer && selectedCustomer.id === null) {
+      if (!selectedCustomer.name.trim()) { 
+        toast.error('Customer name is required for a new customer.');
+        setLoading(false); 
         return;
       }
+      setCustomerCreating(true); // Indicate customer creation API call is starting
+      setCustomerCreateError(null); 
       try {
-        const createdCustomer = await dispatch(addNewCustomer(newCustomerData)).unwrap();
+        const createdCustomer = await createCustomerApi(selectedCustomer); // Call API directly
+        
+        // FIX: Update selectedCustomer with the newly created customer's ID and details
+        setSelectedCustomer(createdCustomer); // <--- THIS IS THE CRUCIAL LINE FOR THE 409 FIX
+        
         customerIdToUse = createdCustomer.id;
         finalCustomerName = createdCustomer.name;
         finalCustomerContact = createdCustomer.contact;
         finalCustomerAddress = createdCustomer.address;
-        toast.success('New customer created!');
+        dispatch(addNewCustomer(createdCustomer)); // Update Redux state with new customer
+        toast.success('New customer saved successfully!');
       } catch (error) {
         console.error('Failed to create new customer for sale:', error);
+        setCustomerCreateError(error.message || 'Unknown error');
         toast.error('Failed to create new customer. Sale not recorded.');
-        setLoading(false);
+        setLoading(false); // Stop loading if customer creation fails
+        setCustomerCreating(false);
         return;
+      } finally {
+        setCustomerCreating(false); // Ensure customerCreating is reset
       }
-    } else if (!customerIdToUse) { // If not new customer, but no existing customer selected
+    } else if (!customerIdToUse) { 
       toast.error('Please select an existing customer or create a new one.');
-      setLoading(false);
+      setLoading(false); 
       return;
     }
 
     if (saleItems.length === 0) {
       toast.error('Please add at least one product to the sale.');
-      setLoading(false);
+      setLoading(false); 
       return;
     }
 
@@ -186,22 +248,21 @@ const NewSale = () => {
 
     const saleData = {
       customerId: customerIdToUse,
-      saleDate: new Date().toISOString(), // Add saleDate
+      saleDate: new Date().toISOString(), 
       items: saleItems.map(item => ({
         productId: item.productId,
         quantity: item.quantity,
-        priceAtSale: item.price // priceAtSale should be the unit price at the time of sale
+        priceAtSale: item.price 
       })),
-      discount: parseFloat(discount) || 0, // Ensure discount is a number when sending
+      discount: parseFloat(discount) || 0,
       paymentMethod: paymentMethod,
       paymentStatus: paymentStatus,
-      totalAmount: grandTotal, // Use grandTotal for totalAmount
-      subTotal: subTotal, // Add subTotal to saleData
       notes: notes,
-      // For InvoiceGenerator, include customer and product details directly if needed
+      totalAmount: grandTotal, 
+      subTotal: subTotal, 
       customerName: finalCustomerName,
       customerPhone: finalCustomerContact,
-      customerAddress: finalCustomerAddress,
+      customerAddress: finalCustomerAddress, 
     };
 
     const formData = new FormData();
@@ -211,65 +272,69 @@ const NewSale = () => {
     }
 
     try {
-      // Problem 1 & 2 Solution: Ensure createSale returns the full sale object
-      // and add it to Redux state correctly.
-      const response = await createSale(formData); // This should return the created sale object from backend
+      const response = await createSaleApi(formData); // Directly call sale API
       
-      // Ensure the response from createSale is the full sale object with ID
       if (response && response.id) {
-        dispatch(addSale(response)); // Add the newly created sale to Redux state
-        setNewlyCreatedSaleData({ // Set full sale data for invoice generator
-          ...response, // Use the response from backend which should have all details including ID
-          customerName: finalCustomerName, // Use the final customer name (new or existing)
-          customerPhone: finalCustomerContact, // Add phone
-          customerAddress: finalCustomerAddress, // Add address
-          items: saleItems.map(item => ({ // Ensure items array is structured for InvoiceGenerator
+        dispatch(addSale(response)); // Update Redux state with new sale
+        setNewlyCreatedSaleData({ 
+          ...response, 
+          customerName: finalCustomerName, 
+          customerPhone: finalCustomerContact,
+          customerAddress: finalCustomerAddress,
+          items: saleItems.map(item => ({ 
             ...item,
-            total: item.price * item.quantity, // Calculate total for each item
-            unitPrice: item.price // Ensure unitPrice is available
+            total: item.price * item.quantity, 
+            unitPrice: item.price 
           }))
         });
-        setShowPrintPrompt(true);
+        setShowPrintPrompt(true); // This should now trigger the print prompt
         toast.success('Sale recorded successfully!');
       } else {
-        // Fallback if backend response is not as expected
         toast.error('Sale recorded, but response missing ID. Please check backend.');
         console.error('Unexpected response from createSale:', response);
       }
     } catch (error) {
       console.error('Failed to record sale:', error);
-      toast.error(`Failed to record sale: ${error.message || 'Unknown error'}`);
+      // Display a more specific message if it's the 409 Conflict
+      if (error.response && error.response.status === 409) {
+          toast.error('Error: Customer already exists. Sale not recorded.');
+      } else {
+          toast.error(`Failed to record sale: ${error.message || 'Unknown error'}`);
+      }
     } finally {
-      setLoading(false);
+      setLoading(false); // Ensure button is re-enabled whether success or fail
     }
   };
 
   const handlePrintConfirmation = (confirm) => {
     setShowPrintPrompt(false);
     if (confirm && newlyCreatedSaleData) {
-      // Navigate to SaleDetail page which will render InvoiceGenerator
       navigate(`/sales/${newlyCreatedSaleData.id}`); 
     } else {
-      // Problem 4 Solution: Redirect to sales list when 'No, Thank You' is clicked
-      // Reset all form states
+      // Reset all relevant form states
       setSelectedCustomer(null);
-      setIsNewCustomer(false);
-      setNewCustomerData({ name: '', contact: '', address: '', creditLimit: 0, outstandingBalance: 0 }); // Clear new customer data
-      setCustomerSearchTerm(''); // Clear search term
+      setNewUnsavedCustomerData({ name: '', contact: '', address: '', creditLimit: 0 }); 
+      setIsNewCustomerMode(false);
+      setCustomerSearchTerm(''); 
       setSaleItems([]);
-      setProductSearchTerm('');
-      setDiscount(''); // Reset to empty string
+      setDiscount(''); 
       setPaymentMethod('cash');
       setPaymentStatus('paid');
       setNotes('');
       setReceiptImageFile(null);
       setReceiptImagePreviewUrl(null);
-      setNewlyCreatedSaleData(null); // Clear newly created sale data
-      navigate('/sales'); // Redirect to sales list
+      setNewlyCreatedSaleData(null); 
+      navigate('/sales'); 
     }
   };
 
-  if (customersLoading || productsLoading) return <Loading />;
+  if (customersLoading || productsLoading) {
+    return <Loading />;
+  }
+
+  if (productsError || customersError) {
+    return <div className="text-red-500 text-center py-4">Error: {productsError || customersError}</div>;
+  }
 
   return (
     <div className="max-w-5xl mx-auto p-4">
@@ -280,84 +345,63 @@ const NewSale = () => {
         <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-100">
           <h2 className="text-2xl font-semibold text-gray-800 mb-6">Customer Information</h2>
 
-          {!isNewCustomer ? (
-            <div className="mb-5">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Select Existing Customer</label>
-              <SearchInput
-                placeholder="Search customers by name or contact..."
-                data={customers}
-                searchKeys={['name', 'contact']}
-                onSelectResult={handleCustomerSelect}
-                renderResult={(customer) => (
-                  <div>
-                    <p className="font-medium text-gray-800">{customer.name}</p>
-                    <p className="text-sm text-gray-500">{customer.contact}</p>
-                  </div>
-                )}
-                value={customerSearchTerm}
-                onSearch={setCustomerSearchTerm}
-              />
+          <div className="mb-5">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Select Existing Customer</label>
+            <SearchInput
+              placeholder="Search customers by name or contact..."
+              data={customers}
+              searchKeys={['name', 'contact']}
+              onSelectResult={handleCustomerSelect}
+              renderResult={(customer) => (
+                <div>
+                  <p className="font-medium text-gray-800">{customer.name}</p>
+                  <p className="text-sm text-gray-500">{customer.contact}</p>
+                </div>
+              )}
+              value={customerSearchTerm}
+              onSearch={setCustomerSearchTerm}
+            />
 
-              {customerSearchTerm && !selectedCustomer && (
+            {/* Display selected customer info or prompt to create new */}
+            {selectedCustomer ? (
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200 text-blue-800">
+                <p className="font-semibold text-lg">{selectedCustomer.name}</p>
+                <p className="text-sm">{selectedCustomer.contact}</p>
+                <p className="text-sm">Outstanding Balance: <span className="font-semibold">{CURRENCY} {selectedCustomer.outstandingBalance?.toFixed(2) || '0.00'}</span></p>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCustomer(null);
+                    setCustomerSearchTerm('');
+                    setIsNewCustomerMode(false); 
+                    setNewUnsavedCustomerData({ name: '', contact: '', address: '', creditLimit: 0 }); 
+                  }}
+                  variant="outline"
+                  size="small"
+                  className="mt-2"
+                >
+                  Change Customer
+                </Button>
+              </div>
+            ) : (
+              customerSearchTerm && !customersLoading && customers.filter(c => 
+                c.name.toLowerCase().includes(customerSearchTerm.toLowerCase()) || 
+                c.contact.toLowerCase().includes(customerSearchTerm.toLowerCase())
+              ).length === 0 && (
                 <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200 text-yellow-800 text-center">
                   <p className="mb-2">No customer found matching "{customerSearchTerm}".</p>
                   <Button
                     type="button"
-                    onClick={() => {
-                      setIsNewCustomer(true);
-                      setSelectedCustomer(null); // Ensure selectedCustomer is null when creating new
-                    }}
+                    onClick={() => setShowNewCustomerModal(true)} // Open modal to create new
                     variant="secondary"
                     size="small"
                   >
                     Create New Customer
                   </Button>
                 </div>
-              )}
-
-              {selectedCustomer && (
-                <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200 text-blue-800">
-                  <p className="font-semibold text-lg">{selectedCustomer.name}</p>
-                  <p className="text-sm">{selectedCustomer.contact}</p>
-                  <p className="text-sm">Outstanding Balance: <span className="font-semibold">{CURRENCY} {selectedCustomer.outstandingBalance?.toFixed(2) || '0.00'}</span></p>
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      setSelectedCustomer(null);
-                      setCustomerSearchTerm('');
-                    }}
-                    variant="outline"
-                    size="small"
-                    className="mt-2"
-                  >
-                    Change Customer
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="mb-5">
-              <h3 className="text-xl font-semibold text-gray-700 mb-4">New Customer Details</h3>
-              <CustomerForm
-                customer={newCustomerData}
-                onChange={handleNewCustomerChange}
-                loading={loading}
-              />
-              <Button
-                type="button"
-                onClick={() => {
-                  setIsNewCustomer(false);
-                  setNewCustomerData({ name: '', contact: '', address: '', creditLimit: 0, outstandingBalance: 0 }); // Clear new customer data
-                  setCustomerSearchTerm(''); // Clear search term
-                }}
-                variant="secondary"
-                size="small"
-                className="mt-4"
-              >
-                Select Existing Customer
-              </Button>
-            </div>
-          )}
+              )
+            )}
+          </div>
         </div>
 
         {/* Products Section */}
@@ -381,11 +425,14 @@ const NewSale = () => {
                   </p>
                 </div>
               )}
-              value={productSearchTerm}
-              onSearch={setProductSearchTerm}
+              value={productSearchTerm} 
+              onSearch={setProductSearchTerm} 
             />
 
-            {productSearchTerm && !productsLoading && products.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()) || p.sku.toLowerCase().includes(productSearchTerm.toLowerCase())).length === 0 && (
+            {productSearchTerm && !productsLoading && products.filter(p => 
+              p.name.toLowerCase().includes(productSearchTerm.toLowerCase()) || 
+              p.sku.toLowerCase().includes(productSearchTerm.toLowerCase())
+            ).length === 0 && (
               <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200 text-yellow-800 text-center">
                 No product found matching "{productSearchTerm}".
               </div>
@@ -399,13 +446,13 @@ const NewSale = () => {
                 <div className="col-span-2 text-right">Price</div>
                 <div className="col-span-2 text-center">Qty</div>
                 <div className="col-span-2 text-right">Total</div>
-                <div className="col-span-2 text-center">Action</div>
+                <div className="col-span-2 flex justify-center">Action</div>
               </div>
 
               {saleItems.map(item => (
                 <div key={item.productId} className="grid grid-cols-12 items-center gap-4 p-4 border-t border-gray-100 hover:bg-gray-50 transition-colors">
                   <div className="col-span-4 font-medium text-gray-800">{item.name}</div>
-                  <div className="col-span-2 text-right text-gray-600">{CURRENCY} {item.price.toFixed(2)}</div>
+                  <div className="col-span-2 text-right text-gray-600">PKR {item.price.toFixed(2)}</div>
                   <div className="col-span-2 text-center">
                     <input
                       type="number"
@@ -415,7 +462,7 @@ const NewSale = () => {
                       className="w-full p-2 border border-gray-300 rounded-md text-center focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
-                  <div className="col-span-2 text-right font-semibold text-gray-800">{CURRENCY} {(item.price * item.quantity).toFixed(2)}</div>
+                  <div className="col-span-2 text-right font-semibold text-gray-800">PKR {(item.price * item.quantity).toFixed(2)}</div>
                   <div className="col-span-2 flex justify-center">
                     <Button
                       type="button"
@@ -431,7 +478,7 @@ const NewSale = () => {
 
               <div className="p-4 border-t border-gray-200 text-right">
                 <div className="text-xl font-bold text-gray-900">
-                  Subtotal: {CURRENCY} {calculateTotal().subTotal.toFixed(2)}
+                  Subtotal: PKR {calculateTotal().subTotal.toFixed(2)}
                 </div>
               </div>
             </div>
@@ -444,7 +491,7 @@ const NewSale = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label htmlFor="discount" className="block text-sm font-medium text-gray-700 mb-2">Discount ({CURRENCY})</label>
+              <label htmlFor="discount" className="block text-sm font-medium text-gray-700 mb-2">Discount (PKR)</label>
               <input
                 type="text"
                 id="discount"
@@ -513,7 +560,7 @@ const NewSale = () => {
               />
               {receiptImagePreviewUrl && (
                 <div className="mt-4">
-                  <ImagePreview url={receiptImagePreviewUrl} alt="Receipt Image" />
+                  <ImagePreview url={receiptImagePreviewUrl} alt="Sale Receipt" />
                 </div>
               )}
             </div>
@@ -521,7 +568,7 @@ const NewSale = () => {
 
           <div className="mt-8 text-right pt-6 border-t border-gray-200">
             <div className="text-2xl font-extrabold text-gray-900">
-              Grand Total: {CURRENCY} {calculateTotal().grandTotal.toFixed(2)}
+              Grand Total: PKR {calculateTotal().grandTotal.toFixed(2)}
             </div>
           </div>
         </div>
@@ -531,13 +578,34 @@ const NewSale = () => {
             type="submit"
             variant="primary"
             size="large"
-            loading={loading}
-            disabled={loading || saleItems.length === 0 || (!selectedCustomer && !isNewCustomer)}
+            loading={loading} 
+            disabled={loading || !selectedCustomer || saleItems.length === 0} 
           >
             Record Sale
           </Button>
         </div>
       </form>
+
+      {/* Modal for creating a new customer */}
+      {showNewCustomerModal && (
+        <Modal title="Create New Customer" onClose={() => setShowNewCustomerModal(false)}>
+          <CustomerForm
+            as="div" 
+            customer={newUnsavedCustomerData} 
+            onChange={handleNewUnsavedCustomerDataChange} 
+            loading={customerCreating} 
+          />
+          <div className="mt-4 text-right">
+              <Button 
+                  type="button" 
+                  onClick={handleSaveNewCustomerFromModal} 
+                  disabled={!newUnsavedCustomerData.name.trim() || customerCreating}
+              >
+                  Add Customer to Sale
+              </Button>
+          </div>
+        </Modal>
+      )}
 
       {/* Print Bill Prompt Modal/Dialog */}
       {showPrintPrompt && (

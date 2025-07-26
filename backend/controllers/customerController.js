@@ -1,4 +1,4 @@
-// ✅ CORRECTED: Added Sale, SaleItem, and Product to the import
+// backend/controllers/customerController.js
 const { Customer, Sale, SaleItem, Product } = require('../models'); 
 const { Op } = require('sequelize');
 

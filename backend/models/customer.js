@@ -19,12 +19,11 @@ module.exports = (sequelize, DataTypes) => {
   Customer.init({
     name: {
       type: DataTypes.STRING,
-      allowNull: false, // Ensure this matches your DB. If frontend sends empty, it fails.
+      allowNull: false, // Ensures a name is always provided
     },
     contact: {
       type: DataTypes.STRING,
-      allowNull: true, // If it's optional
-      // unique: true, // If this is true in DB and you send duplicate, it will fail
+      allowNull: true,
     },
     address: {
       type: DataTypes.STRING,
@@ -46,8 +45,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     digikhataId: {
       type: DataTypes.STRING,
-      allowNull: true, // If it's optional
-      // unique: true, // If this is true in DB and you send duplicate, it will fail
+      allowNull: true,
     },
     customerImage: {
       type: DataTypes.STRING,
