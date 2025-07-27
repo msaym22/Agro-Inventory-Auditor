@@ -3,7 +3,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { FaTachometerAlt, FaBoxOpen, FaUsers, FaShoppingCart, FaChartBar, FaDatabase, FaSignOutAlt } from 'react-icons/fa';
 
-const Sidebar = ({ onLogout }) => {
+const Sidebar = ({ onLogout, onShowAnalyticsLogin }) => { // Added onShowAnalyticsLogin prop
   const linkClasses = "flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-green-100 hover:text-green-800 transition-colors";
   const activeLinkClasses = "bg-green-200 text-green-900 font-bold";
 
@@ -29,11 +29,14 @@ const Sidebar = ({ onLogout }) => {
           <FaShoppingCart className="mr-3" />
           Sales
         </NavLink>
-        {/* Changed link to /analytics-login */}
-        <NavLink to="/analytics-login" className={({ isActive }) => `${linkClasses} ${isActive ? activeLinkClasses : ''}`}>
+        {/* Changed from NavLink to a div with onClick handler */}
+        <div
+          onClick={onShowAnalyticsLogin} // Call the function passed from parent
+          className={`${linkClasses} cursor-pointer`} // Add cursor-pointer for better UX
+        >
           <FaChartBar className="mr-3" />
           Analytics
-        </NavLink>
+        </div>
         <NavLink to="/backup-restore" className={({ isActive }) => `${linkClasses} ${isActive ? activeLinkClasses : ''}`}>
           <FaDatabase className="mr-3" />
           Backup & Restore

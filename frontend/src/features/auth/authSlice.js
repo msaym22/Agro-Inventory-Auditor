@@ -1,102 +1,81 @@
 // frontend/src/features/auth/authSlice.js
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import * as authAPI from '../../api/auth'; // Import all named exports as authAPI
-import { storeAuthToken, removeAuthToken } from '../../utils/auth'; // Corrected storeAuthToken
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'; // Import createAsyncThunk
+import * as authApi from '../../api/auth'; // Assuming your auth API calls are here
 
-const initialState = {
-  user: null,
-  isAuthenticated: false,
-  status: 'idle', // 'idle' | 'loading' | 'succeeded' | 'failed'
-  error: null,
-  analyticsAuthenticated: false, // State for analytics specific authentication
-};
+const user = JSON.parse(localStorage.getItem('user'));
 
-// Async thunk for user login
-export const login = createAsyncThunk('auth/login', async (credentials, { rejectWithValue }) => {
-  try {
-    const response = await authAPI.login(credentials); // Correct usage: authAPI.login
-    storeAuthToken(response.token); // Save token
-    return response.user;
-  } catch (error) {
-    let errorMessage = 'Login failed. Please check your credentials.';
-    if (error.response && error.response.data && error.response.data.message) {
-      errorMessage = error.response.data.message;
+// Define an async thunk for user login
+export const loginUser = createAsyncThunk( // NEW THUNK DEFINITION
+  'auth/loginUser', // Type prefix for the generated action types
+  async ({ username, password }, { rejectWithValue }) => {
+    try {
+      // Assuming authApi.login is your actual API call to log in the user
+      const response = await authApi.login({ username, password });
+      return response.data; // This data will be the action.payload for fulfilled state
+    } catch (error) {
+      // Use rejectWithValue to pass an error message to the rejected state
+      return rejectWithValue(error.response.data.message || error.message);
     }
-    return rejectWithValue(errorMessage);
   }
-});
-
-// Async thunk for user logout
-export const logout = createAsyncThunk('auth/logout', async (_, { rejectWithValue }) => {
-  try {
-    // Removed: await authAPI.logout(); // THIS LINE WAS CAUSING THE ERROR
-    removeAuthToken(); // Remove token from storage - this is enough for client-side logout
-    // No return value needed for logout fulfillment, just success
-  } catch (error) {
-    let errorMessage = 'Logout failed.'; // This error path will now only trigger if removeAuthToken() somehow fails
-    if (error.response && error.response.data && error.response.data.message) {
-      errorMessage = error.response.data.message;
-    }
-    return rejectWithValue(errorMessage);
-  }
-});
+);
 
 const authSlice = createSlice({
   name: 'auth',
-  initialState,
+  initialState: {
+    user: user || null,
+    isAuthenticated: user ? true : false,
+    analyticsAuthenticated: false, // State for analytics access
+    loading: false,
+    error: null,
+  },
   reducers: {
-    // Reducer to set analytics authentication status
+    // These reducers are now handled by extraReducers for async thunk,
+    // but kept here if you have other synchronous actions.
+    // loginStart: (state) => { /* ... */ },
+    // loginSuccess: (state, action) => { /* ... */ },
+    // loginFailure: (state, action) => { /* ... */ },
+
+    logout: (state) => {
+      state.isAuthenticated = false;
+      state.user = null;
+      state.loading = false;
+      state.error = null;
+      state.analyticsAuthenticated = false; // Reset analytics auth on logout
+      localStorage.removeItem('user');
+      // If you persist analyticsAuthenticated in localStorage, clear it here too
+      // localStorage.removeItem('analyticsAuthenticated');
+    },
+    // Reducer to explicitly set analytics authentication status
     setAnalyticsAuthenticated: (state, action) => {
       state.analyticsAuthenticated = action.payload;
+      // If you want analytics authentication to persist across refreshes:
+      // localStorage.setItem('analyticsAuthenticated', action.payload.toString());
     },
-    // Reducer to initialize auth state from token if user refreshes
-    initializeAuth: (state, action) => {
-      state.user = action.payload.user;
-      state.isAuthenticated = action.payload.isAuthenticated;
-      state.status = 'succeeded';
-      state.error = null;
-    },
-    resetAuthStatus: (state) => {
-      state.status = 'idle';
-      state.error = null;
-    }
   },
-  extraReducers: (builder) => {
+  extraReducers: (builder) => { // NEW: Handle actions dispatched by loginUser thunk
     builder
-      .addCase(login.pending, (state) => {
-        state.status = 'loading';
+      .addCase(loginUser.pending, (state) => {
+        state.loading = true;
+        state.error = null;
       })
-      .addCase(login.fulfilled, (state, action) => {
-        state.status = 'succeeded';
+      .addCase(loginUser.fulfilled, (state, action) => {
+        state.loading = false;
         state.isAuthenticated = true;
         state.user = action.payload;
-        state.error = null;
+        localStorage.setItem('user', JSON.stringify(action.payload));
+        state.analyticsAuthenticated = false; // Analytics is not authenticated by main login
       })
-      .addCase(login.rejected, (state, action) => {
-        state.status = 'failed';
+      .addCase(loginUser.rejected, (state, action) => {
+        state.loading = false;
         state.isAuthenticated = false;
         state.user = null;
         state.error = action.payload;
-      })
-      .addCase(logout.fulfilled, (state) => {
-        state.user = null;
-        state.isAuthenticated = false;
-        state.status = 'idle';
-        state.error = null;
-        state.analyticsAuthenticated = false; // Also clear analytics auth on general logout
-      })
-      .addCase(logout.rejected, (state, action) => {
-        // Even if logout action is rejected (e.g., if you added backend call that failed),
-        // clear client-side auth state for security
-        state.user = null;
-        state.isAuthenticated = false;
-        state.status = 'failed';
-        state.error = action.payload;
+        localStorage.removeItem('user');
         state.analyticsAuthenticated = false;
       });
   },
 });
 
-export const { setAnalyticsAuthenticated, initializeAuth, resetAuthStatus } = authSlice.actions;
-
+// Export the newly defined thunk and any other synchronous actions
+export const { logout, setAnalyticsAuthenticated } = authSlice.actions; 
 export default authSlice.reducer;
