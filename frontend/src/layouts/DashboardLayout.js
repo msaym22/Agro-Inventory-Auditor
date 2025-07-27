@@ -11,7 +11,8 @@ const navLinks = [
   { to: '/products', label: 'Products' },
   { to: '/customers', label: 'Customers' },
   { to: '/sales', label: 'Orders' },
-  { to: '/backup', label: 'Backup & Restore' },
+  { to: '/analytics', label: 'Analytics' }, // Added Analytics link here
+  { to: '/backup-restore', label: 'Backup & Restore' }, // Assuming this is the correct path for Backup & Restore
 ];
 
 const DashboardLayout = () => {

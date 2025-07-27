@@ -1,3 +1,4 @@
+// frontend/src/components/sales/InvoiceGenerator.js
 import React, { useRef, useState } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { jsPDF } from 'jspdf';
@@ -10,7 +11,7 @@ import config from '../../config/config';
 // Make sure the path is correct relative to this file.
 import { jameelNooriNastaleeqNormal } from '../../fonts/JameelNooriNastaleeq-normal'; // Assuming you have this font file
 
-const { CURRENCY } = config;
+const { CURRENCY } = config; // Keep CURRENCY here for now as it defines the currency type, even if symbol isn't used.
 
 const InvoiceGenerator = ({ invoiceData }) => {
   const componentRef = useRef();
@@ -66,41 +67,15 @@ const InvoiceGenerator = ({ invoiceData }) => {
   // Helper to get product name based on language
   const getProductNameForLanguage = (item) => {
     if (currentLanguage === 'ur' && item.productNameUrdu) {
-      // Attempt to split the English name to find the non-Urdu part
-      // This logic assumes the English part will follow the Urdu part.
-      // A more robust solution might require a specific delimiter in product.name itself (e.g., "Berring | UC 205").
-      let englishPart = '';
-      if (item.productName) {
-        // Simple heuristic: remove the item.productNameUrdu from item.productName
-        // This might need adjustment based on your exact product naming convention.
-        // For example, if English is "Berring UC 205" and Urdu part is "برنگ",
-        // this will assume "Berring" maps to "برنگ" and tries to get "UC 205".
-        // It's a best-effort approach without more structured data.
-        const englishEquivalentOfUrduPart = item.productName.substring(0, item.productName.indexOf(' ')); // Get first word as potential English equivalent
-        if (englishEquivalentOfUrduPart && item.productName.startsWith(englishEquivalentOfUrduPart)) {
-            englishPart = item.productName.substring(englishEquivalentOfUrduPart.length).trim();
-        } else {
-            englishPart = item.productName; // Fallback to full English if no clear split
-        }
-        // If productNameUrdu is just a part of productName, this might need refinement
-        // For "Berring UC 205" -> "برنگ", and if you only save "برنگ" in nameUrdu,
-        // you need a way to get "UC 205" from "Berring UC 205".
-        // This is complex without a fixed naming convention.
-        // For now, let's assume item.productName contains both, and productNameUrdu is the Urdu part.
-        // We will try to combine them. A simpler approach: if nameUrdu exists, use it + rest of English name.
-        if (item.productNameUrdu && item.productName.includes(item.productNameUrdu)) {
-          // This is a placeholder logic, true implementation depends on naming convention
-          return `${item.productNameUrdu} ${item.productName.replace(item.productNameUrdu, '').trim()}`;
-        }
-      }
-      return item.productName; // Default to English name if no Urdu translation or not in Urdu mode
+      // Removed the 'englishPart' variable as it was not directly used in the return statement.
+      // The logic here is to prioritize Urdu if available and language is Urdu.
+      // Otherwise, default to English.
+      return item.productNameUrdu; // Directly use Urdu name if available and in Urdu mode
     }
-    return item.productName; // Default to English name if no Urdu translation or not in Urdu mode
+    return item.productName; // Default to English name or if not in Urdu mode
   };
 
   // Helper to reverse text for RTL - This is a placeholder for actual RTL text in jsPDF
-  // For jsPDF, you often need a specialized RTL text plugin or more complex text rendering.
-  // For HTML rendering, `dir="rtl"` and `text-align: right` usually suffice.
   const reverseText = (text) => {
     return text; // Return as is, unless a more complex RTL rendering is implemented
   };
@@ -137,13 +112,10 @@ const InvoiceGenerator = ({ invoiceData }) => {
   });
 
   const handleDownloadPDF = () => {
-    // --- DIAGNOSTIC LOG ---
     console.log("InvoiceData for PDF download (handleDownloadPDF):", invoiceData);
-    // --- END DIAGNOSTIC LOG ---
 
     const doc = new jsPDF();
 
-    // === IMPORTANT: FONT EMBEDDING FOR URDU IN PDF ===
     if (currentLanguage === 'ur') {
         doc.addFileToVFS('Jameel-Noori-Nastaleeq-Regular.ttf', jameelNooriNastaleeqNormal);
         doc.addFont('Jameel-Noori-Nastaleeq-Regular.ttf', 'Jameel Noori Nastaleeq', 'normal');
@@ -151,7 +123,6 @@ const InvoiceGenerator = ({ invoiceData }) => {
     } else {
       doc.setFont('Helvetica', 'normal');
     }
-    // === End Font and RTL Configuration ===
 
     // Company Info
     doc.setFontSize(22);
@@ -207,8 +178,8 @@ const InvoiceGenerator = ({ invoiceData }) => {
     const tableData = (invoiceData.items || []).map(item => {
       const productName = getProductNameForLanguage(item);
       const quantity = item.quantity;
-      const unitPrice = `${CURRENCY} ${(item.unitPrice || 0).toFixed(2)}`;
-      const lineTotal = `${CURRENCY} ${(item.total || 0).toFixed(2)}`;
+      const unitPrice = (item.unitPrice || 0).toFixed(2);
+      const lineTotal = (item.total || 0).toFixed(2);
 
       return currentLanguage === 'ur' ?
         [reverseText(lineTotal), reverseText(unitPrice), reverseText(quantity.toString()), reverseText(productName)] :
@@ -249,9 +220,10 @@ const InvoiceGenerator = ({ invoiceData }) => {
     doc.setFont(currentLanguage === 'ur' ? 'Jameel Noori Nastaleeq' : 'Helvetica', 'normal');
     const textAlignment = currentLanguage === 'ur' ? 'right' : 'right';
 
-    doc.text(reverseText(`${getTranslation('subTotal')}: ${CURRENCY} ${(invoiceData.subTotal || 0).toFixed(2)}`), doc.internal.pageSize.getWidth() - 14, finalY, { align: textAlignment });
-    doc.text(reverseText(`${getTranslation('discount')}: ${CURRENCY} ${(invoiceData.discount || 0).toFixed(2)}`), doc.internal.pageSize.getWidth() - 14, finalY + 7, { align: textAlignment });
-    doc.text(reverseText(`${getTranslation('grandTotal')}: ${CURRENCY} ${(invoiceData.grandTotal || 0).toFixed(2)}`), doc.internal.pageSize.getWidth() - 14, finalY + 14, { align: textAlignment });
+    // Removed CURRENCY from total calculations for PDF
+    doc.text(reverseText(`${getTranslation('subTotal')}: ${(invoiceData.subTotal || 0).toFixed(2)}`), doc.internal.pageSize.getWidth() - 14, finalY, { align: textAlignment });
+    doc.text(reverseText(`${getTranslation('discount')}: ${(invoiceData.discount || 0).toFixed(2)}`), doc.internal.pageSize.getWidth() - 14, finalY + 7, { align: textAlignment });
+    doc.text(reverseText(`${getTranslation('grandTotal')}: ${(invoiceData.grandTotal || 0).toFixed(2)}`), doc.internal.pageSize.getWidth() - 14, finalY + 14, { align: textAlignment });
 
     // Notes
     if (invoiceData.notes) {
@@ -263,9 +235,8 @@ const InvoiceGenerator = ({ invoiceData }) => {
     doc.save(`invoice-${invoiceData.invoiceId}.pdf`);
   };
 
-  // --- START OF MISSING RETURN STATEMENT ---
   return (
-    <div className="mt-8">
+    <div className="p-4 bg-gray-50 min-h-screen"> {/* Changed from mt-8 to p-4, bg-gray-50, min-h-screen for better layout alignment */}
       <div className="flex justify-end space-x-4 mb-4 no-print">
         <div className="mr-4">
           <label htmlFor="language-select" className="sr-only">Select Language</label>
@@ -302,7 +273,7 @@ const InvoiceGenerator = ({ invoiceData }) => {
         /* Printable Area (HTML) */
         <div
           ref={componentRef}
-          className="bg-white p-8 rounded shadow"
+          className="bg-white p-6 rounded-lg shadow-lg max-w-2xl mx-auto printable-content" // Added max-w-2xl mx-auto printable-content for consistent width
           dir={currentLanguage === 'ur' ? 'rtl' : 'ltr'}
           style={{
             fontFamily: currentLanguage === 'ur' ? "'Jameel Noori Nastaleeq', 'Noto Naskh Urdu', 'Inter', sans-serif" : "'Inter', sans-serif",
@@ -310,80 +281,76 @@ const InvoiceGenerator = ({ invoiceData }) => {
           }}
         >
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold">{getTranslation('companyName')}</h1>
-            <p className="text-lg">{getTranslation('companySlogan')}</p>
-            <p className="text-gray-600">{getTranslation('companyAddress')}</p>
+            <h1 className="text-4xl font-extrabold text-green-800 mb-2">{getTranslation('companyName')}</h1> {/* Added branding classes */}
+            <p className="text-lg text-gray-700">{getTranslation('companySlogan')}</p> {/* Added branding classes */}
+            <p className="text-md text-gray-500">{getTranslation('companyAddress')}</p> {/* Added branding classes */}
             <h2 className="text-2xl font-bold mt-4">{getTranslation('invoiceTitle')}</h2>
           </div>
 
-          <div className="flex justify-between mb-8">
-            <div className={currentLanguage === 'ur' ? 'text-right-rtl' : 'text-left'}>
-              <h2 className="text-xl font-semibold">{getTranslation('customerInfo')}</h2>
-              <p>{invoiceData.customerName || getTranslation('walkInCustomer')}</p>
-              <p>{getTranslation('contact')}: {invoiceData.customerPhone || getTranslation('na')}</p>
-              <p>{getTranslation('address')}: {invoiceData.customerAddress || getTranslation('na')}</p>
-            </div>
-
-            <div className={currentLanguage === 'ur' ? 'text-left-rtl' : 'text-right'}>
-              <p><strong>{getTranslation('date')}:</strong> {invoiceData.date ? new Date(invoiceData.date).toLocaleDateString(currentLanguage === 'ur' ? 'ur-PK' : 'en-US') : getTranslation('na')}</p>
-              <p><strong>{getTranslation('invoiceTitle')}:</strong> {invoiceData.invoiceId}</p>
-              <p><strong>{getTranslation('paymentMethod')}:</strong> {getTranslation(invoiceData.paymentMethod, invoiceData.paymentMethod)}</p>
-              <p><strong>{getTranslation('status')}:</strong> {getTranslation(invoiceData.paymentStatus, invoiceData.paymentStatus)}</p>
-            </div>
+          <div className="mb-8 p-4 border rounded-lg bg-gray-50"> {/* Added styling for customer details section */}
+            <h2 className="text-xl font-semibold text-gray-800 mb-3">{getTranslation('customerInfo')}</h2>
+            <p className="text-gray-700"><strong>{getTranslation('customer')}:</strong> {invoiceData.customerName || getTranslation('walkInCustomer')}</p>
+            <p className="text-gray-700"><strong>{getTranslation('contact')}:</strong> {invoiceData.customerPhone || getTranslation('na')}</p>
+            <p className="text-gray-700"><strong>{getTranslation('address')}:</strong> {invoiceData.customerAddress || getTranslation('na')}</p>
           </div>
 
-          <table className="w-full border-collapse mb-8">
-            <thead>
-              <tr className="bg-green-100">
-                <th className={`border p-2 ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-left'}`}>{getTranslation('product')}</th>
-                <th className="border p-2 text-center">{getTranslation('quantity')}</th>
-                <th className={`border p-2 ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{getTranslation('unitPrice')}</th>
-                <th className={`border p-2 ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{getTranslation('total')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(invoiceData.items || []).map((item, index) => (
-                <tr key={item.id || index}>
-                  <td className={`border p-2 font-medium text-gray-800 ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-left'}`}>
-                    {getProductNameForLanguage(item)}
-                  </td>
-                  <td className="border p-2 text-center">{item.quantity}</td>
-                  <td className={`border p-2 ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{CURRENCY} ${(item.unitPrice || 0).toFixed(2)}</td>
-                  <td className={`border p-2 font-semibold text-gray-800 ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{CURRENCY} ${(item.total || 0).toFixed(2)}</td>
+          <div className="mb-8"> {/* Adjusted margin bottom for spacing */}
+            <h2 className="text-xl font-semibold text-gray-800 mb-3">Products</h2> {/* Added spacing */}
+            <table className="min-w-full border-collapse mb-8"> {/* Added table styling */}
+              <thead>
+                <tr className="bg-gray-100 text-gray-700 uppercase text-sm leading-normal"> {/* Added header styling */}
+                  <th className={`py-3 px-6 text-left ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-left'}`}>{getTranslation('product')}</th>
+                  <th className="py-3 px-6 text-center">{getTranslation('quantity')}</th> {/* Centered quantity */}
+                  <th className={`py-3 px-6 text-right ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{getTranslation('unitPrice')}</th>
+                  <th className={`py-3 px-6 text-right ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{getTranslation('total')}</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan="3" className={`border p-2 font-semibold ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{getTranslation('subTotal')}</td>
-                <td className="border p-2 font-semibold text-right">
-                  {CURRENCY} ${(invoiceData.subTotal || 0).toFixed(2)}
-                </td>
-              </tr>
-              <tr>
-                <td colSpan="3" className={`border p-2 font-semibold ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{getTranslation('discount')}</td>
-                <td className="border p-2 font-semibold text-right">
-                  {CURRENCY} ${(invoiceData.discount || 0).toFixed(2)}
-                </td>
-              </tr>
-              <tr>
-                <td colSpan="3" className={`border p-2 text-xl font-extrabold ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{getTranslation('grandTotal')}</td>
-                <td className="border p-2 text-xl font-extrabold text-right">
-                  {CURRENCY} ${(invoiceData.grandTotal || 0).toFixed(2)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+              </thead>
+              <tbody className="text-gray-600 text-sm font-light"> {/* Added body styling */}
+                {(invoiceData.items || []).map((item, index) => (
+                  <tr key={item.id || index}>
+                    <td className={`border p-2 font-medium text-gray-800 ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-left'}`}>
+                      {getProductNameForLanguage(item)}
+                    </td>
+                    <td className="border p-2 text-center">{item.quantity}</td>
+                    {/* Removed CURRENCY from HTML rendering */}
+                    <td className={`border p-2 ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{(item.unitPrice || 0).toFixed(2)}</td>
+                    <td className={`border p-2 font-semibold text-gray-800 ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{(item.total || 0).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan="3" className={`border p-2 font-semibold ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{getTranslation('subTotal')}</td>
+                  <td className="border p-2 font-semibold text-right">
+                    {(invoiceData.subTotal || 0).toFixed(2)} {/* Removed CURRENCY */}
+                  </td>
+                </tr>
+                <tr>
+                  <td colSpan="3" className={`border p-2 font-semibold ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{getTranslation('discount')}</td>
+                  <td className="border p-2 font-semibold text-right">
+                    {(invoiceData.discount || 0).toFixed(2)} {/* Removed CURRENCY */}
+                  </td>
+                </tr>
+                <tr>
+                  <td colSpan="3" className={`border p-2 text-xl font-extrabold ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{getTranslation('grandTotal')}</td>
+                  <td className="border p-2 text-xl font-extrabold text-right">
+                    {(invoiceData.grandTotal || 0).toFixed(2)} {/* Removed CURRENCY */}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
 
           {invoiceData.notes && (
-            <div className="mt-4 p-2 bg-gray-50 rounded">
+            <div className="mt-4 p-2 bg-gray-50 rounded"> {/* Added styling for notes */}
               <p className="font-semibold">{getTranslation('notes')}:</p>
               <p className="text-gray-700">{invoiceData.notes}</p>
             </div>
           )}
 
-          <div className="mt-8 text-center text-gray-500">
+          <div className="mt-8 text-center text-gray-500"> {/* Added styling for footer */}
             <p>{getTranslation('thankYou')}</p>
+            <p>Almadina Agro, Vehari.</p>
           </div>
         </div>
       )} {/* Close the conditional rendering for invoiceData */}

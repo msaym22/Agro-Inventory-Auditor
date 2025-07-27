@@ -1,6 +1,6 @@
 // backend/controllers/paymentController.js
 const { Payment, Customer } = require('../models');
-const { sequelize } = require('../models');
+const { sequelize } = require('../models'); // Ensure sequelize is imported for transactions
 
 // Record a new payment for a customer
 exports.createPayment = async (req, res) => {
@@ -25,11 +25,12 @@ exports.createPayment = async (req, res) => {
             amount: parseFloat(amount),
             paymentMethod,
             notes,
-            saleId: saleId || null
+            saleId: saleId || null // Allow saleId to be optional or null
         }, { transaction });
 
         // Update customer's outstanding balance
-        customer.outstandingBalance = (customer.outstandingBalance || 0) - parseFloat(amount);
+        // Subtract the new payment amount from the outstanding balance
+        customer.outstandingBalance = (parseFloat(customer.outstandingBalance) || 0) - parseFloat(amount);
         await customer.save({ transaction });
 
         await transaction.commit();
@@ -43,7 +44,11 @@ exports.createPayment = async (req, res) => {
 
 // Get all payments for a specific customer
 exports.getCustomerPayments = async (req, res) => {
-    const { customerId } = req.params;
+    const { customerId } = req.params; // Correctly extract customerId from req.params
+    if (!customerId) {
+        console.error('Error: customerId is undefined in getCustomerPayments');
+        return res.status(400).json({ error: 'Customer ID is required.' });
+    }
     try {
         const payments = await Payment.findAll({
             where: { customerId },
@@ -53,5 +58,44 @@ exports.getCustomerPayments = async (req, res) => {
     } catch (error) {
         console.error('Failed to fetch payments:', error);
         res.status(500).json({ error: 'Failed to fetch payments', details: error.message });
+    }
+};
+
+// Delete a payment and add its amount back to the customer's outstanding balance
+exports.deletePayment = async (req, res) => {
+    const paymentId = req.params.id; // Get payment ID from route parameters
+
+    let transaction;
+    try {
+        transaction = await sequelize.transaction();
+
+        const payment = await Payment.findByPk(paymentId, { transaction });
+        if (!payment) {
+            await transaction.rollback();
+            return res.status(404).json({ error: 'Payment not found.' });
+        }
+
+        const customerId = payment.customerId;
+        const amount = payment.amount;
+
+        // Delete the payment record within the transaction
+        await payment.destroy({ transaction });
+
+        // Find the customer and add the payment amount back to their outstanding balance
+        const customer = await Customer.findByPk(customerId, { transaction });
+        if (customer) {
+            customer.outstandingBalance = (parseFloat(customer.outstandingBalance) || 0) + parseFloat(amount);
+            await customer.save({ transaction });
+        } else {
+            // Log a warning if customer not found, but proceed with payment deletion
+            console.warn(`Customer with ID ${customerId} not found when trying to revert balance for payment ${paymentId}. Payment was deleted.`);
+        }
+
+        await transaction.commit();
+        res.status(204).send(); // 204 No Content for successful deletion
+    } catch (error) {
+        if (transaction) await transaction.rollback();
+        console.error('Error deleting payment:', error);
+        res.status(500).json({ error: 'Failed to delete payment.', details: error.message });
     }
 };

@@ -1,5 +1,5 @@
 // backend/controllers/customerController.js
-const { Customer, Sale, SaleItem, Product } = require('../models'); 
+const { Customer, Sale, SaleItem, Product, Payment } = require('../models'); // Added Payment import
 const { Op } = require('sequelize');
 
 // Get all customers with pagination and search
@@ -55,6 +55,12 @@ exports.getCustomerById = async (req, res) => {
               include: [{ model: Product, as: 'product' }]
             }
           ]
+        },
+        // Include Payment model here to fetch payment history
+        {
+          model: Payment,
+          as: 'payments', // This 'as' must match the alias defined in your Customer model association
+          order: [['paymentDate', 'DESC']]
         }
       ],
       order: [
@@ -64,6 +70,13 @@ exports.getCustomerById = async (req, res) => {
     if (!customer) {
       return res.status(404).json({ error: 'Customer not found' });
     }
+
+    // Calculate total payments and update outstanding balance if needed
+    const totalPayments = customer.payments ? customer.payments.reduce((acc, payment) => acc + parseFloat(payment.amount), 0) : 0;
+    const totalSalesAmount = customer.sales ? customer.sales.reduce((acc, sale) => acc + parseFloat(sale.totalAmount), 0) : 0;
+    
+    customer.dataValues.outstandingBalance = (totalSalesAmount - totalPayments).toFixed(2);
+
     res.json(customer);
   } catch (error) {
     console.error('Error fetching customer by ID:', error);
@@ -71,20 +84,50 @@ exports.getCustomerById = async (req, res) => {
   }
 };
 
-// Create a new customer
+// Create a new customer or return existing if name/contact matches
 exports.createCustomer = async (req, res) => {
   console.log("Customer creation request received. req.body:", req.body);
+  const { name, contact, address, creditLimit } = req.body;
+
   try {
-    const customer = await Customer.create(req.body);
+    // Attempt to find an existing customer by name and contact
+    const [customer, created] = await Customer.findOrCreate({
+      where: {
+        name: name,
+        // Only include contact in the unique check if it's provided and not empty
+        ...(contact && { contact: contact })
+      },
+      defaults: {
+        name,
+        contact,
+        address,
+        creditLimit: parseFloat(creditLimit) || 0,
+        outstandingBalance: 0 // New customers start with 0 outstanding balance
+      }
+    });
+
+    if (!created) {
+      // If customer was found (not created), log and return existing
+      console.log("Customer already exists with this name/contact:", customer.name);
+      // Optionally, you might want to return a different status code like 200 OK
+      // if it's considered a successful "find". For this flow, 200 is appropriate
+      // and frontend can check 'isNewRecord' or 'created' flag if needed.
+      return res.status(200).json(customer); // Return the existing customer
+    }
+
     console.log("Customer created successfully:", customer);
-    return res.status(201).json(customer);
+    return res.status(201).json(customer); // Return the newly created customer
+
   } catch (error) {
     console.error("Error creating customer in backend:", error);
     if (error.name === 'SequelizeValidationError') {
       return res.status(400).json({ error: 'Validation failed', details: error.errors.map(e => e.message) });
     }
+    // This case should ideally be handled by findOrCreate now, but keeping as a fallback
     if (error.name === 'SequelizeUniqueConstraintError') {
-      return res.status(409).json({ error: 'Customer already exists', details: error.message });
+      // This error might still occur if a unique index exists on 'contact' where NULLs are not unique,
+      // and multiple customers are created with empty contact fields.
+      return res.status(409).json({ error: 'A customer with this name/contact already exists.', details: error.message });
     }
     return res.status(500).json({ error: 'Internal server error during customer creation', details: error.message });
   }

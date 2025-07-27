@@ -56,53 +56,42 @@ const PrivateRoute = ({ children }) => {
 
 const AppRouter = () => {
   return (
-    // BrowserRouter wraps the entire application's routing.
-    // This is the only BrowserRouter instance in the entire app.
     <BrowserRouter>
       <Routes>
         {/* Public Routes */}
-        {/* The login page is accessible without authentication. */}
         <Route path="/login" element={<MainLayout><Login /></MainLayout>} />
 
-        {/* Analytics Login Page: Publicly accessible, but leads to protected analytics content. */}
-        {/* The actual password check for analytics is handled within AnalyticsLoginPage/AnalyticsPage components. */}
+        {/* Analytics Login Page: Now the primary entry for analytics */}
         <Route path="/analytics-login" element={<MainLayout><AnalyticsLoginPage /></MainLayout>} />
 
-        {/* Protected Routes: These routes are wrapped by PrivateRoute, which checks for authentication. */}
-        {/* DashboardLayout provides the common layout (sidebar, header) for all protected pages. */}
+        {/* Protected Routes: These routes are wrapped by PrivateRoute */}
         <Route element={<PrivateRoute><DashboardLayout /></PrivateRoute>}>
-          {/* Redirect from root path to dashboard if authenticated. */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          {/* Dashboard Page */}
           <Route path="/dashboard" element={<Dashboard />} />
 
-          {/* Product Management Routes */}
           <Route path="/products" element={<ProductListPage />} />
           <Route path="/products/new" element={<NewProduct />} />
           <Route path="/products/edit/:id" element={<EditProduct />} />
           <Route path="/products/:id" element={<ProductDetail />} />
 
-          {/* Customer Management Routes */}
           <Route path="/customers" element={<CustomerListPage />} />
           <Route path="/customers/new" element={<NewCustomer />} />
           <Route path="/customers/edit/:id" element={<EditCustomer />} />
           <Route path="/customers/:id" element={<CustomerDetail />} />
 
-          {/* Sales/Order Management Routes */}
           <Route path="/sales" element={<SalesListPage />} />
           <Route path="/sales/new" element={<NewSale />} />
           <Route path="/sales/:id" element={<SaleDetail />} />
 
-          {/* Backup & Restore Page */}
           <Route path="/backup-restore" element={<BackupRestore />} />
           
-          {/* Analytics Page: Protected by general authentication. */}
+          {/* Analytics Page: Now accessed internally by AnalyticsLoginPage after auth */}
+          {/* We keep the path as /analytics, but AnalyticsPage itself will redirect if not authenticated via sessionStorage */}
           <Route path="/analytics" element={<AnalyticsPage />} /> 
 
         </Route>
 
         {/* Catch-all Route for 404 Not Found */}
-        {/* Any unmatched routes will render the NotFound component. */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>

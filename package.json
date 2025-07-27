@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "@google-cloud/translate": "^9.2.0"
+    "@google-cloud/translate": "^9.2.0",
+    "jwt-decode": "^4.0.0"
   }
 }

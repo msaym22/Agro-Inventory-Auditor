@@ -1,8 +1,10 @@
 // frontend/src/pages/analytics/AnalyticsLoginPage.js
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDispatch } from 'react-redux'; // Import useDispatch
 import { toast } from 'react-toastify';
 import { Button } from '../../components/common/Button';
+import { setAnalyticsAuthenticated } from '../../features/auth/authSlice'; // Import the new action
 
 const ANALYTICS_PASSWORD = 'naveed1974'; // Hardcoded password for analytics access
 
@@ -10,21 +12,26 @@ const AnalyticsLoginPage = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const dispatch = useDispatch(); // Initialize useDispatch
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setLoading(true);
 
     if (password === ANALYTICS_PASSWORD) {
+      // Dispatch Redux action to set analytics authentication status
+      dispatch(setAnalyticsAuthenticated(true)); // Set analyticsAuthenticated to true
+      console.log('AnalyticsLoginPage: Redux analyticsAuthenticated set to true.'); // Diagnostic log
+
       toast.success('Analytics access granted!');
-      // Store a flag in session storage or local storage
-      // This is a simple client-side check for this session
-      sessionStorage.setItem('analytics_authenticated', 'true');
-      navigate('/analytics'); // Redirect to the main analytics page
+      
+      // Navigate to the main analytics page. No need for setTimeout with Redux.
+      navigate('/analytics');
+      
     } else {
       toast.error('Incorrect password.');
+      setLoading(false); // Reset loading on incorrect password
     }
-    setLoading(false);
   };
 
   return (

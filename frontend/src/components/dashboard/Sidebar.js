@@ -1,3 +1,4 @@
+// frontend/src/components/dashboard/Sidebar.js
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { FaTachometerAlt, FaBoxOpen, FaUsers, FaShoppingCart, FaChartBar, FaDatabase, FaSignOutAlt } from 'react-icons/fa';
@@ -28,7 +29,8 @@ const Sidebar = ({ onLogout }) => {
           <FaShoppingCart className="mr-3" />
           Sales
         </NavLink>
-        <NavLink to="/analytics" className={({ isActive }) => `${linkClasses} ${isActive ? activeLinkClasses : ''}`}>
+        {/* Changed link to /analytics-login */}
+        <NavLink to="/analytics-login" className={({ isActive }) => `${linkClasses} ${isActive ? activeLinkClasses : ''}`}>
           <FaChartBar className="mr-3" />
           Analytics
         </NavLink>

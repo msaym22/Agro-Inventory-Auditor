@@ -1,5 +1,5 @@
 // frontend/src/pages/analytics/AnalyticsPage.js
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -8,7 +8,7 @@ import AnalyticsChart from '../../components/dashboard/AnalyticsChart'; // Reusi
 import { Button } from '../../components/common/Button'; // Reusing Button
 import { formatCurrency } from '../../utils/helpers'; // For currency formatting
 
-// Import new analytics thunks (will be added to saleSlice.js)
+// Import new analytics thunks
 import {
   fetchOverallProfit,
   fetchProfitByProduct,
@@ -20,42 +20,46 @@ const AnalyticsPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  // Check for client-side analytics authentication flag
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Read analyticsAuthenticated directly from Redux auth slice
+  const { analyticsAuthenticated } = useSelector(state => state.auth); // Get from auth slice
 
   // Get data from Redux sales slice (analytics part)
   const {
     salesAnalytics = { // Ensure salesAnalytics is an object with default nested properties
       totalSales: 0,
       totalRevenue: 0,
-      totalProfit: 0, // New property
+      totalProfit: 0,
       salesByPeriod: [],
       productSales: [],
-      profitByProduct: [], // New property
-      salesByCustomer: [], // New property
+      profitByProduct: [],
+      salesByCustomer: [],
     },
     loading: analyticsLoading,
     error: analyticsError
   } = useSelector(state => state.sales);
 
   useEffect(() => {
-    // Client-side authentication check
-    const analyticsAuth = sessionStorage.getItem('analytics_authenticated');
-    if (analyticsAuth === 'true') {
-      setIsAuthenticated(true);
+    // THIS IS THE ONLY LOG RELATED TO AUTHENTICATION CHECK. It reads from Redux state.
+    console.log('AnalyticsPage useEffect running. analyticsAuthenticated (Redux):', analyticsAuthenticated);
+
+    if (analyticsAuthenticated) {
+      console.log('AnalyticsPage: Analytics access IS authenticated via Redux, fetching data...');
       // Fetch all detailed analytics data
       dispatch(fetchOverallProfit());
       dispatch(fetchProfitByProduct());
       dispatch(fetchSalesByCustomerWithQuantity());
-      dispatch(fetchSalesAnalytics('monthly')); // Re-fetch sales trend for this page
+      dispatch(fetchSalesAnalytics('monthly'));
     } else {
-      // If not authenticated, redirect to analytics login
+      console.log('AnalyticsPage: Analytics access NOT authenticated via Redux, redirecting to login...');
       toast.warn('Please log in to analytics first.');
       navigate('/analytics-login');
     }
-  }, [dispatch, navigate]);
+    // Dependency array updated to depend on analyticsAuthenticated from Redux
+  }, [dispatch, navigate, analyticsAuthenticated]); 
 
-  if (!isAuthenticated) {
+  // Use analyticsAuthenticated from Redux for rendering decisions
+  if (!analyticsAuthenticated) {
+    // This return will show if Redux state is false, and then useEffect will navigate
     return <Loading message="Authenticating analytics access..." />;
   }
 
@@ -68,14 +72,15 @@ const AnalyticsPage = () => {
   }
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-6">Detailed Analytics Dashboard</h1>
+    // Applied consistent dashboard content styling
+    <div className="max-w-7xl mx-auto bg-white p-8 rounded-xl shadow-lg"> 
+      <h1 className="text-3xl font-bold text-gray-900 mb-6">Detailed Analytics Dashboard</h1>
 
       {/* Overall Financials */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-700">Total Revenue</h3>
-          <p className="text-3xl font-bold text-blue-600 mt-2">{formatCurrency(analyticsAnalytics.totalRevenue)}</p>
+          <p className="text-3xl font-bold text-blue-600 mt-2">{formatCurrency(salesAnalytics.totalRevenue)}</p>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-700">Total Profit</h3>

@@ -3,23 +3,44 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchCustomerById } from '../../features/customers/customerSlice';
-import customersAPI from '../../api/customers'; // Assuming you have this for payments
+import api from '../../api/api'; // Correctly import your API client
 import Loading from '../../components/common/Loading';
 import { toast } from 'react-toastify';
-import { FaEdit, FaArrowLeft, FaPlus, FaFileInvoice } from 'react-icons/fa';
+import { FaEdit, FaArrowLeft, FaPlus, FaFileInvoice, FaTrash } from 'react-icons/fa'; // Import FaTrash
 import { Button } from '../../components/common/Button';
 
-// Placeholder for your API functions - you'll need to create these
+// Actual API functions for payments
 const paymentsAPI = {
     getPaymentsByCustomerId: async (customerId) => {
-        // In a real app, this would be: return api.get(`/payments/customer/${customerId}`);
         console.log(`Fetching payments for customer ${customerId}`);
-        return []; // Return empty array for now
+        try {
+            const response = await api.get(`/payments/customer/${customerId}`);
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching payments by customer ID:", error);
+            throw error;
+        }
     },
     createPayment: async (paymentData) => {
-        // In a real app, this would be: return api.post('/payments', paymentData);
         console.log('Creating payment:', paymentData);
-        return { id: Math.random(), ...paymentData }; // Return a mock payment
+        try {
+            const response = await api.post('/payments', paymentData);
+            return response.data;
+        } catch (error) {
+            console.error("Error creating payment:", error);
+            throw error;
+        }
+    },
+    // New: Function to delete a payment
+    deletePayment: async (paymentId) => {
+        console.log(`Deleting payment ${paymentId}`);
+        try {
+            await api.delete(`/payments/${paymentId}`); // Use the imported 'api' with DELETE method
+            return true;
+        } catch (error) {
+            console.error("Error deleting payment:", error);
+            throw error;
+        }
     }
 };
 
@@ -64,6 +85,23 @@ const PaymentHistory = ({ customerId, onPaymentAdded }) => {
             setLoading(false);
         }
     };
+
+    // New: Handle payment deletion
+    const handleDeletePayment = async (paymentId) => {
+        if (window.confirm('Are you sure you want to delete this payment? This action cannot be undone.')) {
+            setLoading(true);
+            try {
+                await paymentsAPI.deletePayment(paymentId);
+                toast.success('Payment deleted successfully!');
+                onPaymentAdded(); // Refresh parent component data (customer balance)
+                fetchPayments(); // Refresh payment list in this component
+            } catch (error) {
+                toast.error('Failed to delete payment.');
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
     
     return (
         <div className="mt-6 bg-white p-4 rounded-lg shadow">
@@ -75,7 +113,6 @@ const PaymentHistory = ({ customerId, onPaymentAdded }) => {
             </div>
             {showForm && (
                 <form onSubmit={handlePaymentSubmit} className="space-y-4 p-4 border rounded-lg bg-gray-50 mb-4">
-                    {/* Form fields for adding a new payment */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          <div>
                             <label className="block text-sm font-medium">Amount</label>
@@ -106,8 +143,13 @@ const PaymentHistory = ({ customerId, onPaymentAdded }) => {
                 {loading ? <p>Loading payments...</p> : payments.length > 0 ? (
                     payments.map(payment => (
                         <div key={payment.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                            <span>{new Date(payment.paymentDate).toLocaleDateString()} - {payment.notes}</span>
+                            {/* Changed to toLocaleString() to include date and time */}
+                            <span>{new Date(payment.paymentDate).toLocaleString()} - {payment.notes}</span>
                             <span className="font-bold">Rs {payment.amount.toFixed(2)}</span>
+                            {/* New: Delete button */}
+                            <Button onClick={() => handleDeletePayment(payment.id)} variant="danger" small="true">
+                                <FaTrash />
+                            </Button>
                         </div>
                     ))
                 ) : (
@@ -124,7 +166,6 @@ const CustomerDetail = () => {
     const { id } = useParams();
     const dispatch = useDispatch();
     
-    // ✅ CORRECTED: Changed 'customerDetails' to 'currentCustomer' to match your Redux state
     const { currentCustomer: customer, status, error } = useSelector(state => state.customers);
 
     const fetchDetails = () => {
@@ -180,7 +221,7 @@ const CustomerDetail = () => {
                     </div>
                 </div>
 
-                <PaymentHistory customerId={customer.id} onPaymentAdded={fetchDetails} />
+                {customer.id && <PaymentHistory customerId={customer.id} onPaymentAdded={fetchDetails} />}
                 
                 <div className="mt-6">
                     <h3 className="text-xl font-semibold mb-4">Purchase History</h3>
