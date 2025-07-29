@@ -1,52 +1,53 @@
-// backend/controllers/analyticsController.js
+// msaym22/almadina-agro/Almadina-Agro-abd29d75b3664b7b4eb5cb4c7bcae0d6f2c03885/backend/controllers/analyticsController.js
 const { Sale, Product, Customer, SaleItem } = require('../models');
 const { sequelize } = require('../models'); // Import the sequelize instance
 const { Op } = require('sequelize');
 const moment = require('moment');
 
-// Helper function to get date range based on period OR explicit start/end dates
-const getDateRange = (period, customStartDate, customEndDate) => {
-  let startDate = null;
-  let endDate = null;
-
-  if (customStartDate && customEndDate) {
-    startDate = moment(customStartDate).startOf('day').toDate();
-    endDate = moment(customEndDate).endOf('day').toDate();
-  } else {
+// Helper to construct date conditions
+const getDateRangeConditions = (period, startDate, endDate) => {
+  let whereCondition = {};
+  if (startDate && endDate) {
+    whereCondition = {
+      saleDate: {
+        [Op.between]: [
+          moment(startDate).startOf('day').toDate(),
+          moment(endDate).endOf('day').toDate()
+        ]
+      }
+    };
+  } else if (period && period !== 'all') {
+    let dateFilter;
     switch (period) {
       case 'daily':
-        startDate = moment().subtract(30, 'days').startOf('day').toDate();
-        endDate = moment().endOf('day').toDate(); // End of current day
+        dateFilter = moment().subtract(30, 'days').toDate();
         break;
       case 'weekly':
-        startDate = moment().subtract(12, 'weeks').startOf('week').toDate();
-        endDate = moment().endOf('week').toDate(); // End of current week
+        dateFilter = moment().subtract(12, 'weeks').toDate();
         break;
       case 'monthly':
-        startDate = moment().subtract(12, 'months').startOf('month').toDate();
-        endDate = moment().endOf('month').toDate(); // End of current month
+        dateFilter = moment().subtract(12, 'months').toDate();
         break;
       case 'yearly':
-        startDate = moment().subtract(5, 'years').startOf('year').toDate();
-        endDate = moment().endOf('year').toDate(); // End of current year
+        dateFilter = moment().subtract(5, 'years').toDate();
         break;
-      case 'all':
       default:
-        // No specific date filter for 'all time' or invalid period
-        break;
+        dateFilter = moment().subtract(12, 'months').toDate(); // Default for fallthrough
     }
+    whereCondition = {
+      saleDate: {
+        [Op.gte]: dateFilter
+      }
+    };
   }
-  return startDate && endDate ? { saleDate: { [Op.between]: [startDate, endDate] } } : {};
+  return whereCondition;
 };
-
 
 // @desc    Get overall sales analytics (total sales, total revenue, sales by period, product sales)
 // @route   GET /api/analytics/sales?period={period}&startDate={date}&endDate={date}
 // @access  Private
 const getSalesAnalytics = async (req, res) => {
-  const { period = 'all', startDate: reqStartDate, endDate: reqEndDate } = req.query;
-
-  const dateWhereClause = getDateRange(period, reqStartDate, reqEndDate);
+  const { period = 'monthly', startDate, endDate } = req.query; // 'daily', 'weekly', 'monthly', 'yearly', 'all'
 
   let groupByFormat;
   switch (period) {
@@ -62,15 +63,15 @@ const getSalesAnalytics = async (req, res) => {
     case 'yearly':
       groupByFormat = '%Y';
       break;
-    case 'all':
     default:
-      groupByFormat = '%Y-%m'; // Default to monthly grouping for 'all' or no period
-      break;
+      groupByFormat = '%Y-%m';
   }
 
+  const dateConditions = getDateRangeConditions(period, startDate, endDate);
+
   try {
-    const totalSales = await Sale.count({ where: dateWhereClause });
-    const totalRevenueResult = await Sale.sum('totalAmount', { where: dateWhereClause });
+    const totalSales = await Sale.count({ where: dateConditions });
+    const totalRevenueResult = await Sale.sum('totalAmount', { where: dateConditions });
     const totalRevenue = totalRevenueResult || 0;
 
     const salesByPeriod = await Sale.findAll({
@@ -78,11 +79,12 @@ const getSalesAnalytics = async (req, res) => {
         [sequelize.fn('strftime', groupByFormat, sequelize.col('saleDate')), 'period'],
         [sequelize.fn('SUM', sequelize.col('totalAmount')), 'total']
       ],
-      where: dateWhereClause,
+      where: dateConditions,
       group: ['period'],
       order: [['period', 'ASC']]
     });
 
+    // Fetch product sales performance (top products by revenue)
     const productSalesRaw = await SaleItem.findAll({
       attributes: [
         'quantity',
@@ -97,8 +99,8 @@ const getSalesAnalytics = async (req, res) => {
         model: Sale,
         as: 'sale',
         attributes: [],
-        where: dateWhereClause,
-        required: true
+        required: true,
+        where: dateConditions // Apply date filter to associated Sale
       }],
       raw: true,
     });
@@ -112,7 +114,8 @@ const getSalesAnalytics = async (req, res) => {
 
     const productSales = Object.entries(productSalesMap)
       .map(([productName, revenue]) => ({ productName, revenue }))
-      .sort((a, b) => b.revenue - a.revenue);
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10);
 
     res.json({
       totalSales,
@@ -127,10 +130,10 @@ const getSalesAnalytics = async (req, res) => {
       })),
     });
   } catch (err) {
-    console.error('Failed to fetch sales analytics:', err.stack);
-    res.status(500).json({ 
-      message: 'Error fetching sales analytics', 
-      error: process.env.NODE_ENV === 'development' ? err.stack : err.message 
+    console.error('Failed to fetch sales analytics:', err);
+    res.status(500).json({
+      message: 'Error fetching sales analytics',
+      error: process.env.NODE_ENV === 'development' ? err.stack : err.message
     });
   }
 };
@@ -139,8 +142,8 @@ const getSalesAnalytics = async (req, res) => {
 // @route   GET /api/analytics/profit/overall?period={period}&startDate={date}&endDate={date}
 // @access  Private
 const getOverallProfit = async (req, res) => {
-  const { period, startDate: reqStartDate, endDate: reqEndDate } = req.query;
-  const dateWhereClause = getDateRange(period, reqStartDate, reqEndDate);
+  const { period, startDate, endDate } = req.query;
+  const dateConditions = getDateRangeConditions(period, startDate, endDate);
 
   try {
     const profitItems = await SaleItem.findAll({
@@ -157,8 +160,8 @@ const getOverallProfit = async (req, res) => {
         model: Sale,
         as: 'sale',
         attributes: [],
-        where: dateWhereClause,
-        required: true
+        required: true,
+        where: dateConditions // Apply date filter to associated Sale
       }],
       raw: true,
     });
@@ -172,10 +175,10 @@ const getOverallProfit = async (req, res) => {
 
     res.json({ totalProfit: parseFloat(totalProfit || 0).toFixed(2) });
   } catch (err) {
-    console.error('Failed to fetch overall profit:', err.stack);
-    res.status(500).json({ 
-      message: 'Error fetching overall profit', 
-      error: process.env.NODE_ENV === 'development' ? err.stack : err.message 
+    console.error('Failed to fetch overall profit:', err);
+    res.status(500).json({
+      message: 'Error fetching overall profit',
+      error: process.env.NODE_ENV === 'development' ? err.stack : err.message
     });
   }
 };
@@ -184,8 +187,8 @@ const getOverallProfit = async (req, res) => {
 // @route   GET /api/analytics/profit/by-product?period={period}&startDate={date}&endDate={date}
 // @access  Private
 const getProfitByProduct = async (req, res) => {
-  const { period, startDate: reqStartDate, endDate: reqEndDate } = req.query;
-  const dateWhereClause = getDateRange(period, reqStartDate, reqEndDate);
+  const { period, startDate, endDate } = req.query;
+  const dateConditions = getDateRangeConditions(period, startDate, endDate);
 
   try {
     const profitByProductRaw = await SaleItem.findAll({
@@ -202,8 +205,8 @@ const getProfitByProduct = async (req, res) => {
         model: Sale,
         as: 'sale',
         attributes: [],
-        where: dateWhereClause,
-        required: true
+        required: true,
+        where: dateConditions // Apply date filter to associated Sale
       }],
       raw: true,
     });
@@ -220,7 +223,8 @@ const getProfitByProduct = async (req, res) => {
 
     const profitByProduct = Object.entries(profitMap)
       .map(([productName, profit]) => ({ productName, profit }))
-      .sort((a, b) => b.profit - a.profit);
+      .sort((a, b) => b.profit - a.profit)
+      .slice(0, 10);
 
     res.json({
       profitByProduct: profitByProduct.map(p => ({
@@ -229,10 +233,10 @@ const getProfitByProduct = async (req, res) => {
       }))
     });
   } catch (err) {
-    console.error('Failed to fetch profit by product:', err.stack);
-    res.status(500).json({ 
-      message: 'Error fetching profit by product', 
-      error: process.env.NODE_ENV === 'development' ? err.stack : err.message 
+    console.error('Failed to fetch profit by product:', err);
+    res.status(500).json({
+      message: 'Error fetching profit by product',
+      error: process.env.NODE_ENV === 'development' ? err.stack : err.message
     });
   }
 };
@@ -241,164 +245,145 @@ const getProfitByProduct = async (req, res) => {
 // @route   GET /api/analytics/sales/by-customer-quantity?period={period}&startDate={date}&endDate={date}
 // @access  Private
 const getSalesByCustomerWithQuantity = async (req, res) => {
-  const { period, startDate: reqStartDate, endDate: reqEndDate } = req.query;
-  const dateWhereClause = getDateRange(period, reqStartDate, reqEndDate);
+  const { period, startDate, endDate } = req.query;
+  const dateConditions = getDateRangeConditions(period, startDate, endDate);
 
   try {
     const salesByCustomerRaw = await Sale.findAll({
       attributes: [
-        'id', // Sale ID
-        'saleDate', // Needed for filtering if customer name is not unique enough
+        'id', // Include Sale ID for potential grouping in JS if needed
         [sequelize.col('customer.name'), 'customerName'], // Customer name
       ],
       include: [
         {
           model: Customer,
           as: 'customer',
-          attributes: ['id', 'contact', 'address'], // Include contact/address for customer detail
-          required: false // Use LEFT OUTER JOIN for walk-in customers
+          attributes: [],
+          required: false // Use required: false for left join, as customer might be null (walk-in)
         },
         {
           model: SaleItem,
-          as: 'items',
-          attributes: ['quantity', 'priceAtSale', 'productId'],
+          as: 'items', // Already lowercase 'items', which is correct
+          attributes: ['quantity', 'priceAtSale'], // Ensure these are loaded for JS calculation
           required: true,
           include: [{
             model: Product,
-            as: 'product',
-            attributes: ['name'],
+            as: 'product', // Already lowercase 'product', which is correct
+            attributes: ['name'], // Fetch product name
             required: true
           }],
         },
       ],
-      where: dateWhereClause, // Apply date filter to Sales
-      raw: true,
+      where: dateConditions, // Apply date filter to Sale
+      raw: true, // Get raw data
     });
 
+    // Manually aggregate and map the results to correctly calculate totalRevenue and quantitySold
     const aggregatedSales = salesByCustomerRaw.reduce((acc, row) => {
-      const customerId = row['customer.id'] || 'walk-in'; // Use customerId for unique key
-      const customerName = row.customerName || 'Walk-in Customer';
-      const customerContact = row['customer.contact'] || 'N/A';
-      const customerAddress = row['customer.address'] || 'N/A';
-      const productName = row['items.product.name'];
-      const saleItemId = row['items.id']; // Include sale item ID for history lookup
+        const customerName = row.customerName || 'Walk-in Customer';
+        const productName = row['items.product.name']; // Correctly accessing aliased product name from nested SaleItem
+        const quantitySold = parseFloat(row.quantity || 0); // Use raw quantity from SaleItem
+        const priceAtSale = parseFloat(row.priceAtSale || 0); // Use raw priceAtSale from SaleItem
+        const totalRevenue = quantitySold * priceAtSale;
 
-      const quantitySold = parseFloat(row['items.quantity'] || 0);
-      const priceAtSale = parseFloat(row['items.priceAtSale'] || 0);
-      const totalRevenue = quantitySold * priceAtSale;
+        // Create a unique key for each customer-product combination
+        const key = `${customerName}-${productName}`;
 
-      // Key by customerId and productName for aggregation
-      const key = `${customerId}-${productName}`;
-
-      if (!acc[key]) {
-        acc[key] = {
-          customerId: customerId,
-          customerName: customerName,
-          customerContact: customerContact,
-          customerAddress: customerAddress,
-          productName: productName,
-          quantitySold: 0,
-          totalRevenue: 0,
-          saleItemIds: [] // To store relevant saleItem IDs for history
-        };
-      }
-      acc[key].quantitySold += quantitySold;
-      acc[key].totalRevenue += totalRevenue;
-      acc[key].saleItemIds.push(saleItemId); // Collect sale item IDs
-      return acc;
+        if (!acc[key]) {
+            acc[key] = {
+              customerName: customerName,
+              productName: productName,
+              quantitySold: 0,
+              totalRevenue: 0
+            };
+        }
+        acc[key].quantitySold += quantitySold;
+        acc[key].totalRevenue += totalRevenue;
+        return acc;
     }, {});
 
     const formattedSalesByCustomer = Object.values(aggregatedSales).map(s => ({
-      customerId: s.customerId,
-      customerName: s.customerName,
-      customerContact: s.customerContact,
-      customerAddress: s.customerAddress,
-      productName: s.productName,
-      quantitySold: s.quantitySold,
-      totalRevenue: parseFloat(s.totalRevenue).toFixed(2),
-      saleItemIds: s.saleItemIds // Include for drill-down
-    })).sort((a,b) => b.totalRevenue - a.totalRevenue || a.customerName.localeCompare(b.customerName));
+        ...s,
+        totalRevenue: parseFloat(s.totalRevenue).toFixed(2),
+        quantitySold: s.quantitySold // Quantity is already summed
+    })).sort((a,b) => a.customerName.localeCompare(b.customerName) || b.quantitySold - a.quantitySold); // Re-sort if aggregation changes order
+
 
     res.json({ salesByCustomer: formattedSalesByCustomer });
   } catch (err) {
-    console.error('Failed to fetch sales by customer with quantity:', err.stack);
-    res.status(500).json({ 
-      message: 'Error fetching sales by customer with quantity', 
-      error: process.env.NODE_ENV === 'development' ? err.stack : err.message 
+    console.error('Failed to fetch sales by customer with quantity:', err);
+    res.status(500).json({
+      message: 'Error fetching sales by customer with quantity',
+      error: process.env.NODE_ENV === 'development' ? err.stack : err.message
     });
   }
 };
 
-// @desc    Get Products by Quantity Sold
-// @route   GET /api/analytics/products/by-quantity-sold?period={period}&startDate={date}&endDate={date}
+// @desc    Get Top Products by Quantity Sold
+// @route   GET /api/analytics/products/quantity-sold?period={period}&startDate={date}&endDate={date}
 // @access  Private
 const getProductsByQuantitySold = async (req, res) => {
-  const { period, startDate: reqStartDate, endDate: reqEndDate } = req.query;
-  const dateWhereClause = getDateRange(period, reqStartDate, reqEndDate);
+  const { period, startDate, endDate } = req.query; // Accept period or date range
+
+  const dateConditions = getDateRangeConditions(period, startDate, endDate);
 
   try {
-    const productsSoldRaw = await SaleItem.findAll({
+    const productsByQuantitySold = await SaleItem.findAll({
       attributes: [
-        'productId',
+        [sequelize.col('product.name'), 'productName'],
         [sequelize.fn('SUM', sequelize.col('SaleItem.quantity')), 'totalQuantitySold'],
       ],
-      include: [{
-        model: Product,
-        as: 'product',
-        attributes: ['name'],
-        required: true
-      }, {
-        model: Sale, // Include Sale to filter by date
-        as: 'sale',
-        attributes: [],
-        where: dateWhereClause,
-        required: true
-      }],
-      group: ['productId', 'product.name'],
-      order: [[sequelize.literal('totalQuantitySold'), 'DESC']],
+      include: [
+        {
+          model: Product,
+          as: 'product',
+          attributes: [],
+          required: true // INNER JOIN to ensure only products that exist are considered
+        },
+        {
+          model: Sale,
+          as: 'sale',
+          attributes: [],
+          required: true, // INNER JOIN to filter by saleDate
+          where: dateConditions
+        }
+      ],
+      group: ['product.name'],
+      order: [[sequelize.literal('totalQuantitySold'), 'DESC']], // Order by sum of quantity
       raw: true,
     });
 
     res.json({
-      productsByQuantitySold: productsSoldRaw.map(p => ({
-        productId: p.productId, // Include productId for drill-down
+      productsByQuantitySold: productsByQuantitySold.map(p => ({
         productName: p.productName,
-        totalQuantitySold: parseInt(p.totalQuantitySold, 10)
+        totalQuantitySold: parseInt(p.totalQuantitySold || 0)
       }))
     });
   } catch (err) {
-    console.error('Failed to fetch products by quantity sold:', err.stack);
-    res.status(500).json({ 
-      message: 'Error fetching products by quantity sold', 
-      error: process.env.NODE_ENV === 'development' ? err.stack : err.message 
+    console.error('Failed to fetch products by quantity sold:', err);
+    res.status(500).json({
+      message: 'Error fetching products by quantity sold',
+      error: process.env.NODE_ENV === 'development' ? err.stack : err.message
     });
   }
 };
 
 
-// NEW: @desc Get detailed sales history for a specific customer
-// @route   GET /api/analytics/customers/:id/detail?startDate={date}&endDate={date}
+// @desc    Get Detailed Sales History for a specific Customer
+// @route   GET /api/analytics/customer-history/:customerId?startDate={date}&endDate={date}
 // @access  Private
-const getCustomerDetailAnalytics = async (req, res) => {
-  const customerId = req.params.id;
-  const { startDate: reqStartDate, endDate: reqEndDate } = req.query;
-  const dateWhereClause = getDateRange('all', reqStartDate, reqEndDate); // Use 'all' if no period specified, and rely on custom dates
+const getCustomerHistory = async (req, res) => {
+  const { customerId } = req.params;
+  const { startDate, endDate } = req.query;
+
+  const dateConditions = getDateRangeConditions(null, startDate, endDate); // Use direct dates
 
   try {
-    const customer = await Customer.findByPk(customerId, {
-      attributes: ['id', 'name', 'contact', 'address', 'creditLimit', 'outstandingBalance']
-    });
-
-    if (!customer) {
-      return res.status(404).json({ message: 'Customer not found.' });
-    }
-
-    const salesHistory = await Sale.findAll({
+    const customerSales = await Sale.findAll({
       where: {
-        customerId: customerId,
-        ...dateWhereClause // Apply date filter to sales
+        customerId,
+        ...dateConditions // Apply date filter
       },
-      attributes: ['id', 'saleDate', 'totalAmount', 'discount', 'paymentMethod', 'paymentStatus'],
       include: [
         {
           model: SaleItem,
@@ -407,186 +392,173 @@ const getCustomerDetailAnalytics = async (req, res) => {
           include: [{
             model: Product,
             as: 'product',
-            attributes: ['name', 'purchasePrice'] // Include purchasePrice for profit calculation
+            attributes: ['id', 'name', 'purchasePrice', 'sellingPrice', 'nameUrdu'],
           }],
-          required: true
-        }
+        },
       ],
       order: [['saleDate', 'DESC']],
       raw: true,
+      nest: true, // Crucial for properly nesting included data with raw: true
     });
 
-    let totalCustomerProfit = 0;
-    let totalCustomerSales = 0; // Renamed from totalCustomerRevenue to avoid confusion if revenue is gross
+    let totalProfitFromCustomer = 0;
+    let totalSalesToCustomer = 0;
+    const formattedHistory = customerSales.map(sale => {
+      let saleProfit = 0;
+      let saleRevenue = parseFloat(sale.totalAmount || 0);
 
-    const formattedSalesHistory = salesHistory.map(sale => {
-        let saleProfit = 0;
-        let saleRevenue = parseFloat(sale.totalAmount || 0);
+      sale.items.forEach(item => {
+        const quantity = item.quantity || 0;
+        const priceAtSale = item.priceAtSale || 0;
+        const purchasePrice = item.product.purchasePrice || 0;
+        saleProfit += quantity * (priceAtSale - purchasePrice);
+      });
 
-        totalCustomerSales += saleRevenue;
+      totalProfitFromCustomer += saleProfit;
+      totalSalesToCustomer += saleRevenue;
 
-        // Calculate profit for each item in the sale and sum up for total sale profit
-        // Note: With raw:true, nested items data is flattened
-        if (sale['items.quantity']) { // Check if there's at least one item
-            const quantity = parseFloat(sale['items.quantity'] || 0);
-            const priceAtSale = parseFloat(sale['items.priceAtSale'] || 0);
-            const purchasePrice = parseFloat(sale['items.product.purchasePrice'] || 0);
-            saleProfit += (quantity * (priceAtSale - purchasePrice));
-        }
-
-        totalCustomerProfit += saleProfit;
-
-        return {
-            saleId: sale.id,
-            saleDate: sale.saleDate,
-            totalAmount: parseFloat(sale.totalAmount).toFixed(2),
-            profit: parseFloat(saleProfit).toFixed(2), // Profit for this specific sale
-            itemsSummary: sale.items ? sale.items.map(item => ({ // Reconstruct item summary
-                productName: item.product.name,
-                quantity: item.quantity,
-                unitPrice: item.priceAtSale
-            })) : [],
-            paymentMethod: sale.paymentMethod,
-            paymentStatus: sale.paymentStatus
-        };
+      return {
+        saleId: sale.id,
+        saleDate: sale.saleDate,
+        totalAmount: parseFloat(sale.totalAmount || 0).toFixed(2),
+        paymentMethod: sale.paymentMethod,
+        paymentStatus: sale.paymentStatus,
+        items: sale.items.map(item => ({
+          productId: item.product.id,
+          productName: item.product.name,
+          productNameUrdu: item.product.nameUrdu,
+          quantity: item.quantity,
+          unitPrice: parseFloat(item.priceAtSale || 0).toFixed(2),
+          itemProfit: parseFloat((item.quantity || 0) * ((item.priceAtSale || 0) - (item.product.purchasePrice || 0))).toFixed(2),
+        })),
+        profitFromSale: parseFloat(saleProfit).toFixed(2),
+      };
     });
-
 
     res.json({
-      customer: customer,
-      totalCustomerSales: parseFloat(totalCustomerSales).toFixed(2),
-      totalCustomerProfit: parseFloat(totalCustomerProfit).toFixed(2),
-      salesHistory: formattedSalesHistory,
+      customerHistory: formattedHistory,
+      totalProfitFromCustomer: parseFloat(totalProfitFromCustomer).toFixed(2),
+      totalSalesToCustomer: parseFloat(totalSalesToCustomer).toFixed(2),
     });
-
   } catch (err) {
-    console.error('Failed to fetch customer detail analytics:', err.stack);
-    res.status(500).json({ 
-      message: 'Error fetching customer detail analytics', 
-      error: process.env.NODE_ENV === 'development' ? err.stack : err.message 
+    console.error('Failed to fetch customer history:', err);
+    res.status(500).json({
+      message: 'Error fetching customer history',
+      error: process.env.NODE_ENV === 'development' ? err.stack : err.message
     });
   }
 };
 
-// NEW: @desc Get detailed sales history for a specific product
-// @route   GET /api/analytics/products/:id/detail?startDate={date}&endDate={date}
+// @desc    Get Detailed Sales History for a specific Product
+// @route   GET /api/analytics/product-history/:productId?startDate={date}&endDate={date}
 // @access  Private
-const getProductDetailAnalytics = async (req, res) => {
-  const productId = req.params.id;
-  const { startDate: reqStartDate, endDate: reqEndDate } = req.query;
-  const dateWhereClause = getDateRange('all', reqStartDate, reqEndDate); // Use 'all' if no period specified, and rely on custom dates
+const getProductHistory = async (req, res) => {
+  const { productId } = req.params;
+  const { startDate, endDate } = req.query;
+
+  const dateConditions = getDateRangeConditions(null, startDate, endDate); // Use direct dates
 
   try {
-    const product = await Product.findByPk(productId, {
-      attributes: ['id', 'name', 'sku', 'sellingPrice', 'purchasePrice', 'stock']
-    });
-
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found.' });
-    }
-
-    const salesHistoryRaw = await SaleItem.findAll({
-      where: {
-        productId: productId,
-        // Apply date filter through Sale association
-        '$sale.saleDate$': dateWhereClause.saleDate ? dateWhereClause.saleDate[Op.between] : undefined
-      },
-      attributes: ['id', 'quantity', 'priceAtSale', 'saleId'],
+    const productSales = await SaleItem.findAll({
+      where: { productId },
       include: [
         {
           model: Sale,
           as: 'sale',
-          attributes: ['id', 'saleDate', 'totalAmount', 'discount', 'paymentStatus'],
+          attributes: ['id', 'saleDate', 'totalAmount', 'paymentMethod', 'paymentStatus'],
+          where: dateConditions, // Apply date filter to associated Sale
           include: [{
             model: Customer,
             as: 'customer',
-            attributes: ['name', 'contact'],
-            required: false // For walk-in customers
-          }],
-          required: true
+            attributes: ['id', 'name'],
+            required: false // Customer can be null (walk-in)
+          }]
+        },
+        {
+          model: Product,
+          as: 'product',
+          attributes: ['id', 'name', 'purchasePrice', 'sellingPrice'],
+          required: true // Ensure product exists
         }
       ],
-      order: [['sale', 'saleDate', 'DESC']], // Order by sale date
+      order: [[{ model: Sale, as: 'sale' }, 'saleDate', 'DESC']],
       raw: true,
+      nest: true, // Crucial for properly nesting included data with raw: true
     });
 
-    let totalProductProfit = 0;
-    let totalProductRevenue = 0;
-    let totalProductQuantitySold = 0;
+    let totalQuantitySold = 0;
+    let totalProfitFromProduct = 0;
+    let totalRevenueFromProduct = 0;
 
-    const formattedSalesHistory = salesHistoryRaw.map(item => {
-        const quantity = parseFloat(item.quantity || 0);
-        const priceAtSale = parseFloat(item.priceAtSale || 0);
-        const purchasePrice = parseFloat(product.purchasePrice || 0); // Use product's purchasePrice
+    const formattedHistory = productSales.map(item => {
+      const quantity = item.quantity || 0;
+      const priceAtSale = item.priceAtSale || 0;
+      const purchasePrice = item.product.purchasePrice || 0;
+      const revenue = quantity * priceAtSale;
+      const profit = quantity * (priceAtSale - purchasePrice);
 
-        const saleProfit = quantity * (priceAtSale - purchasePrice);
-        const saleRevenue = quantity * priceAtSale;
+      totalQuantitySold += quantity;
+      totalProfitFromProduct += profit;
+      totalRevenueFromProduct += revenue;
 
-        totalProductProfit += saleProfit;
-        totalProductRevenue += saleRevenue;
-        totalProductQuantitySold += quantity;
-
-        return {
-            saleItemId: item.id,
-            saleId: item.saleId,
-            saleDate: item['sale.saleDate'],
-            customerName: item['sale.customer.name'] || 'Walk-in Customer',
-            customerContact: item['sale.customer.contact'] || 'N/A',
-            quantity: quantity,
-            unitPriceAtSale: priceAtSale.toFixed(2),
-            itemRevenue: saleRevenue.toFixed(2),
-            itemProfit: saleProfit.toFixed(2),
-            saleTotalAmount: parseFloat(item['sale.totalAmount']).toFixed(2), // Total amount of the whole sale
-            saleDiscount: parseFloat(item['sale.discount']).toFixed(2),
-            salePaymentStatus: item['sale.paymentStatus']
-        };
+      return {
+        saleId: item.sale.id,
+        saleDate: item.sale.saleDate,
+        customerName: item.sale.customer ? item.sale.customer.name : 'Walk-in Customer',
+        quantitySold: quantity,
+        unitPriceAtSale: parseFloat(priceAtSale).toFixed(2),
+        itemRevenue: parseFloat(revenue).toFixed(2),
+        itemProfit: parseFloat(profit).toFixed(2),
+      };
     });
 
     res.json({
-      product: product,
-      totalProductQuantitySold: totalProductQuantitySold,
-      totalProductRevenue: parseFloat(totalProductRevenue).toFixed(2),
-      totalProductProfit: parseFloat(totalProductProfit).toFixed(2),
-      salesHistory: formattedSalesHistory,
+      productHistory: formattedHistory,
+      totalQuantitySold: totalQuantitySold,
+      totalProfitFromProduct: parseFloat(totalProfitFromProduct).toFixed(2),
+      totalRevenueFromProduct: parseFloat(totalRevenueFromProduct).toFixed(2),
     });
-
   } catch (err) {
-    console.error('Failed to fetch product detail analytics:', err.stack);
-    res.status(500).json({ 
-      message: 'Error fetching product detail analytics', 
-      error: process.env.NODE_ENV === 'development' ? err.stack : err.message 
+    console.error('Failed to fetch product history:', err);
+    res.status(500).json({
+      message: 'Error fetching product history',
+      error: process.env.NODE_ENV === 'development' ? err.stack : err.message
     });
   }
 };
 
 
-// @desc    Get inventory valuation (already corrected in previous steps)
+// @desc    Get inventory valuation
 // @route   GET /api/analytics/inventory-valuation
 // @access  Private
 const getInventoryValuation = async (req, res) => {
   try {
-    const totalValuation = await Product.sum(sequelize.literal('stock * purchasePrice'));
-    const totalRetailValue = await Product.sum(sequelize.literal('stock * sellingPrice'));
+    // Assuming 'currentStock' and 'purchasePrice' exist on the Product model
+    // FIX: Changed costPrice to purchasePrice based on product.js
+    const totalValuation = await Product.sum(sequelize.literal('stock * purchasePrice')); // FIX: Changed currentStock to stock, costPrice to purchasePrice
+    const totalRetailValue = await Product.sum(sequelize.literal('stock * sellingPrice')); // FIX: Changed currentStock to stock
 
     res.json({
       totalValuation: parseFloat(totalValuation || 0).toFixed(2),
       totalRetailValue: parseFloat(totalRetailValue || 0).toFixed(2),
     });
   } catch (err) {
-    console.error('Failed to get inventory valuation:', err.stack);
-    res.status(500).json({ 
-      error: 'Failed to get inventory valuation', 
-      details: process.env.NODE_ENV === 'development' ? err.stack : err.message 
+    console.error('Failed to get inventory valuation:', err);
+    res.status(500).json({
+      error: 'Failed to get inventory valuation',
+      details: process.env.NODE_ENV === 'development' ? err.stack : err.message
     });
   }
 };
 
-// @desc    Get monthly sales report (largely redundant, but kept if used elsewhere)
+// @desc    Get monthly sales report (similar to sales analytics but specifically for monthly)
 // @route   GET /api/analytics/monthly-sales-report
 // @access  Private
 const getMonthlySalesReport = async (req, res) => {
-  const { period = 'monthly', startDate: reqStartDate, endDate: reqEndDate } = req.query; // Accept period
-  const dateWhereClause = getDateRange(period, reqStartDate, reqEndDate);
+  // This endpoint might become redundant if getSalesAnalytics is fully flexible with periods
+  // Keeping it for now but consider deprecating if getSalesAnalytics handles all needs.
+  const { startDate, endDate } = req.query;
+  const dateConditions = getDateRangeConditions('monthly', startDate, endDate); // Force monthly grouping for this report
 
   try {
     const monthlySales = await Sale.findAll({
@@ -594,7 +566,7 @@ const getMonthlySalesReport = async (req, res) => {
         [sequelize.fn('strftime', '%Y-%m', sequelize.col('saleDate')), 'month'],
         [sequelize.fn('SUM', sequelize.col('totalAmount')), 'totalSales']
       ],
-      where: dateWhereClause, // Apply date filter
+      where: dateConditions,
       group: ['month'],
       order: [['month', 'ASC']]
     });
@@ -606,22 +578,23 @@ const getMonthlySalesReport = async (req, res) => {
       }))
     });
   } catch (err) {
-    console.error('Failed to get monthly sales report:', err.stack);
-    res.status(500).json({ 
-      error: 'Failed to get monthly sales report', 
-      details: process.env.NODE_ENV === 'development' ? err.stack : err.message 
+    console.error('Failed to get monthly sales report:', err);
+    res.status(500).json({
+      error: 'Failed to get monthly sales report',
+      details: process.env.NODE_ENV === 'development' ? err.stack : err.message
     });
   }
 };
+
 
 module.exports = {
   getSalesAnalytics,
   getOverallProfit,
   getProfitByProduct,
   getSalesByCustomerWithQuantity,
-  getProductsByQuantitySold, // New export
-  getCustomerDetailAnalytics, // New export
-  getProductDetailAnalytics,  // New export
   getInventoryValuation,
   getMonthlySalesReport,
+  getProductsByQuantitySold, // EXPORT THE NEW FUNCTION
+  getCustomerHistory, // EXPORT THE NEW FUNCTION
+  getProductHistory, // EXPORT THE NEW FUNCTION
 };
