@@ -1,26 +1,32 @@
+// frontend/src/pages/sales/SalesListPage.js
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchSales } from '../../features/sales/saleSlice';
 import { Link, useNavigate } from 'react-router-dom';
-import SaleList from '../../components/sales/SaleList';
-import SearchInput from '../../components/common/SearchInput';
+import { toast } from 'react-toastify';
+
+// Components
+import DataTable from '../../components/common/DataTable';
 import Loading from '../../components/common/Loading';
+import SearchInput from '../../components/common/SearchInput';
 import { Button } from '../../components/common/Button';
+
+// Redux Thunks and Actions
+import { fetchSales, deleteExistingSale } from '../../features/sales/saleSlice'; // CORRECTED IMPORT: fetchSales is a thunk
+import { formatCurrency, formatDate } from '../../utils/helpers'; // Assuming these are available
 
 const SalesListPage = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  // Ensure salesState defaults to an empty array if undefined/null
-  const salesState = useSelector(state => state.sales.items || []); 
-  const status = useSelector(state => state.sales.status);
-  const error = useSelector(state => state.sales.error);
-  const pagination = useSelector(state => state.sales.pagination);
 
+  // Redux states
+  const { items: sales, loading, error, pagination } = useSelector(state => state.sales); // Correctly access 'items'
+
+  const [currentPage, setCurrentPage] = useState(pagination.currentPage);
   const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    // Pass an object with page and search term to the thunk
+    // Dispatch fetchSales as a thunk with current page and search term
     dispatch(fetchSales({ page: currentPage, search: searchTerm }));
   }, [dispatch, currentPage, searchTerm]);
 
@@ -37,86 +43,77 @@ const SalesListPage = () => {
     navigate('/sales/new');
   };
 
-  return (
-    <div className="p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Sales Records</h1>
-        <Button
-          onClick={handleRecordNewSale}
-          variant="primary"
-          size="large"
-        >
-          Record New Sale
-        </Button>
-      </div>
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this sale?')) {
+      setIsDeleting(true);
+      try {
+        const resultAction = await dispatch(deleteExistingSale(id)); // Dispatch the delete thunk
+        if (deleteExistingSale.fulfilled.match(resultAction)) {
+          toast.success('Sale deleted successfully!');
+        } else {
+          toast.error(resultAction.payload || 'Failed to delete sale.');
+        }
+      } catch (err) {
+        toast.error('An unexpected error occurred during deletion.');
+        console.error('Error deleting sale:', err);
+      } finally {
+        setIsDeleting(false);
+      }
+    }
+  };
 
-      <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-100 mb-8">
-        <div className="flex justify-between items-center mb-6">
-          <div className="w-1/2">
-            <SearchInput
-              placeholder="Search sales by customer or amount..."
-              onSearch={handleSearch}
-              debounceMs={500}
-            />
-          </div>
-          {/* Add other filters here if needed */}
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+  };
+
+  const columns = [
+    { header: 'Sale ID', accessor: 'id' },
+    { header: 'Date', accessor: 'saleDate', formatter: (date) => formatDate(date) },
+    { header: 'Customer', accessor: 'customer.name' }, // Access nested customer name
+    { header: 'Total Amount', accessor: 'totalAmount', formatter: (amount) => formatCurrency(amount) },
+    { header: 'Payment Status', accessor: 'paymentStatus' },
+    {
+      header: 'Actions',
+      accessor: 'actions',
+      formatter: (row) => (
+        <div className="flex space-x-2">
+          <Button onClick={() => navigate(`/sales/${row.id}`)} small>View</Button>
+          <Button onClick={() => navigate(`/sales/${row.id}/edit`)} small>Edit</Button>
+          <Button onClick={() => handleDelete(row.id)} small danger disabled={isDeleting}>
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </Button>
         </div>
+      ),
+    },
+  ];
 
-        {status === 'loading' ? (
-          <Loading />
-        ) : error ? (
-          <div className="text-red-500 text-center py-8 text-lg">
-            Error: {error}
-          </div>
-        ) : salesState.length === 0 ? ( // Check salesState.length after ensuring it's an array
-          <div className="text-center py-12 text-gray-600">
-            <p className="text-lg mb-4">No sales records found.</p>
-            <Button
-              onClick={handleRecordNewSale}
-              variant="secondary"
-              size="medium"
-            >
-              Record Your First Sale
-            </Button>
-          </div>
-        ) : (
-          <>
-            <SaleList
-              sales={salesState} // salesState is now guaranteed to be an array
-              onSelect={handleSelectSale}
-            />
+  if (loading) {
+    return <Loading />;
+  }
 
-            {pagination && pagination.totalItems > 0 && (
-              <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
-                <div className="text-gray-600 text-sm">
-                  Showing {(pagination.currentPage - 1) * pagination.itemsPerPage + 1} - {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of {pagination.totalItems} sales
-                </div>
-                <div className="flex space-x-2">
-                  <Button
-                    onClick={() => setCurrentPage(prev => prev - 1)}
-                    disabled={currentPage === 1}
-                    variant="secondary"
-                    size="small"
-                  >
-                    Previous
-                  </Button>
-                  <span className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-sm">
-                    {currentPage}
-                  </span>
-                  <Button
-                    onClick={() => setCurrentPage(prev => prev + 1)}
-                    disabled={currentPage === pagination.totalPages}
-                    variant="secondary"
-                    size="small"
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+  if (error) {
+    toast.error(error); // Display error using toast
+    return <div className="text-red-500 text-center py-4">Error loading sales data.</div>;
+  }
+
+  return (
+    <div className="p-6 bg-gray-100 min-h-screen">
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">Sales List</h1>
+      <div className="flex justify-between items-center mb-4">
+        <SearchInput
+          placeholder="Search sales by customer or product..."
+          value={searchTerm}
+          onSearch={handleSearch}
+          debounceMs={500} // Added debounce for better performance
+        />
+        <Button onClick={handleRecordNewSale}>Add New Sale</Button>
       </div>
+      <DataTable
+        columns={columns}
+        data={sales} // Use 'sales' (which is 'items')
+        pagination={pagination}
+        onPageChange={handlePageChange}
+      />
     </div>
   );
 };

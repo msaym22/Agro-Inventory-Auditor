@@ -1,23 +1,19 @@
 // frontend/src/pages/dashboard/Dashboard.js
 import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-// Import the thunks
-import { fetchProducts } from '../../features/products/productSlice';
-import { fetchCustomers } from '../../features/customers/customerSlice';
-import { 
-  fetchSales, 
-  fetchSalesAnalytics, 
-  fetchProductAnalytics, 
-  fetchOverallProfit, 
-  fetchProfitByProduct, 
-  fetchSalesByCustomerWithQuantity 
-} from '../../features/sales/saleSlice';
+import { toast } from 'react-toastify'; // Keep toast for error display
 
+// Components
 import QuickStats from '../../components/dashboard/QuickStats';
 import SalesSummary from '../../components/dashboard/SalesSummary';
-import AnalyticsChart from '../../components/dashboard/AnalyticsChart';
 import LowStockAlert from '../../components/dashboard/LowStockAlert';
 import Loading from '../../components/common/Loading';
+
+// Redux Thunks
+import { fetchProducts } from '../../features/products/productSlice';
+import { fetchCustomers } from '../../features/customers/customerSlice';
+// CORRECTED IMPORT: fetchSales is a thunk exported directly from saleSlice
+import { fetchSales } from '../../features/sales/saleSlice'; 
 
 const Dashboard = () => {
   const dispatch = useDispatch();
@@ -25,84 +21,67 @@ const Dashboard = () => {
   const { products = [], loading: productsLoading, error: productsError } = useSelector(state => state.products);
   const { customers = [], loading: customersLoading, error: customersError } = useSelector(state => state.customers);
 
-  // UPDATED: Correctly access 'items' from state.sales and alias it to 'sales' for local use
+  // Correctly access 'items' from state.sales and alias it to 'sales' for local use
   const {
-    items: sales = [], // Changed from 'sales' to 'items' to match saleSlice initialState
-    salesAnalytics = { // Ensure salesAnalytics is an object with default nested properties
-      totalSales: 0,
-      totalRevenue: 0,
-      totalProfit: 0,
-      salesByPeriod: [],
-      productSales: [],
-      profitByProduct: [],
-      salesByCustomer: [],
-    },
-    loading: salesLoading,
-    error: salesError
-  } = useSelector(state => state.sales); // state.sales is now the entire sales slice object
+    items: sales = [], // Access sales list (renamed to items in slice)
+    loading: salesLoading, // Loading state for sales list
+    error: salesError // Error state for sales list
+  } = useSelector(state => state.sales); // state.sales is the entire sales slice object
 
-  // --- DIAGNOSTIC LOGS ---
-  console.log("Dashboard Redux State Check:");
-  console.log("products:", products);
-  console.log("customers:", customers);
-  console.log("sales:", sales); // This will now correctly log the items array
-  console.log("salesAnalytics:", salesAnalytics);
-  console.log("salesAnalytics.salesByPeriod:", salesAnalytics.salesByPeriod);
-  console.log("salesAnalytics.productSales:", salesAnalytics.productSales);
-  console.log("products.length:", products?.length);
-  console.log("customers.length:", customers?.length);
-  console.log("sales.length:", sales?.length);
+  // --- DIAGNOSTIC LOGS (Keep during development, remove for production) ---
+  useEffect(() => {
+    console.log("Dashboard Redux State Check:");
+    console.log("products.length:", products?.length);
+    console.log("customers.length:", customers?.length);
+    console.log("sales.length:", sales?.length);
+    // console.log("salesAnalytics.totalProfit (from sales slice):", useSelector(state => state.sales.salesAnalytics.totalProfit)); // Example if needed for debugging analytics specific data
+  }, [products, customers, sales]); // Depend on these states to re-log when they change
   // --- END DIAGNOSTIC LOGS ---
 
   useEffect(() => {
     const loadAllDashboardData = async () => {
+      // Dispatch thunks to fetch necessary data for the dashboard
       await Promise.allSettled([
-        dispatch(fetchProducts()),
-        dispatch(fetchCustomers()),
-        dispatch(fetchSales()),
-        // Analytics specific to Dashboard, if any, could be fetched here too
-        // For the main analytics tab, they are fetched on AnalyticsPage.js
-        // dispatch(fetchSalesAnalytics('monthly')),
-        // dispatch(fetchProductAnalytics()),
+        dispatch(fetchProducts({ page: 1, limit: 100 })), // Fetch enough products
+        dispatch(fetchCustomers({ page: 1, limit: 100 })), // Fetch enough customers
+        dispatch(fetchSales({ page: 1, limit: 10, search: '' })), // Fetch sales for summary
       ]);
     };
 
     loadAllDashboardData();
-  }, [dispatch]);
+  }, [dispatch]); // Dispatch only on component mount
 
-  const loading = productsLoading || customersLoading || salesLoading;
-  const error = productsError || customersError || salesError;
+  // Combine loading and error states for overall dashboard status
+  const overallLoading = productsLoading || customersLoading || salesLoading;
+  const overallError = productsError || customersError || salesError;
 
-  const totalSalesCount = sales?.length || 0; // Use the renamed 'sales' variable (which is 'items')
+  const totalSalesCount = sales?.length || 0;
   const totalCustomersCount = customers?.length || 0;
 
   const lowStockProducts = Array.isArray(products) ? products.filter(p => p.stock < 10) : [];
 
-  if (loading) {
+  if (overallLoading) {
     return <Loading />;
   }
 
-  if (error) {
-    return <div className="text-red-500 text-center py-4">Error: {error}</div>;
+  if (overallError) {
+    toast.error(overallError); // Display error using toast
+    return <div className="text-red-500 text-center py-4">Error loading dashboard data.</div>;
   }
 
   return (
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Dashboard Overview</h1>
+    <div className="p-6 bg-gray-100 min-h-screen">
+      <h1 className="text-3xl font-bold text-gray-800 mb-6">Dashboard Overview</h1>
 
       <QuickStats
         totalSales={totalSalesCount}
         totalCustomers={totalCustomersCount}
       />
 
-      {/* SalesSummary and AnalyticsChart components are moved to AnalyticsPage.js */}
-      {/* <SalesSummary salesByPeriod={salesAnalytics.salesByPeriod} /> */}
-      {/* <AnalyticsChart data={salesAnalytics.productSales} /> */}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
-        <LowStockAlert
-          products={lowStockProducts}
-        />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        {/* SalesSummary now relies on the `sales` (items) array from Redux state */}
+        <SalesSummary sales={sales} /> 
+        <LowStockAlert products={lowStockProducts} />
       </div>
     </div>
   );

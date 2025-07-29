@@ -9,19 +9,20 @@ import { Button } from '../../components/common/Button';
 import FileUpload from '../../components/common/FileUpload';
 import ImagePreview from '../../components/common/ImagePreview';
 import Loading from '../../components/common/Loading';
-import CustomerForm from '../../components/customers/CustomerForm'; 
+import CustomerForm from '../../components/customers/CustomerForm';
 import SearchInput from '../../components/common/SearchInput';
-import InvoiceGenerator from '../../components/sales/InvoiceGenerator'; 
+import InvoiceGenerator from '../../components/sales/InvoiceGenerator';
 import Modal from '../../components/common/Modal'; // Ensure this Modal.js file exists
 
-// API calls directly (as per your current setup and to resolve previous import issues)
-import { createSale as createSaleApi } from '../../api/sales'; // Alias to avoid conflict if a thunk also exists
-import { createCustomer as createCustomerApi } from '../../api/customers'; // Alias to avoid conflict
+// API calls directly
+import { createSale as createSaleApi } from '../../api/sales';
+import { createCustomer as createCustomerApi } from '../../api/customers';
 
 // Redux Thunks and Actions
 import { fetchProducts } from '../../features/products/productSlice';
-import { fetchCustomers, addNewCustomer } from '../../features/customers/customerSlice'; // addNewCustomer is a plain action here
-import { addSale } from '../../features/sales/saleSlice'; // addSale is a plain action here
+import { fetchCustomers, addNewCustomer as addNewCustomerAction } from '../../features/customers/customerSlice'; // Corrected import for addNewCustomer as a plain action
+// CORRECTED IMPORT: addNewSale as a thunk, addSale as a plain action
+import { addNewSale as addNewSaleThunk, addSale } from '../../features/sales/saleSlice';
 
 import config from '../../config/config';
 
@@ -34,44 +35,43 @@ const NewSale = () => {
   // Redux states for data fetching and loading
   const { products, loading: productsLoading, error: productsError } = useSelector((state) => state.products);
   const { customers, loading: customersLoading, error: customersError } = useSelector((state) => state.customers);
-  const { loading: saleCreating, error: saleError } = useSelector((state) => state.sales);
-  
+  const { loading: salesLoading, error: salesError } = useSelector((state) => state.sales); // Use salesLoading to avoid conflict with local 'loading'
+
   // Local state for customer creation management during form submission
-  const [customerCreating, setCustomerCreating] = useState(false); 
+  const [customerCreating, setCustomerCreating] = useState(false);
   const [customerCreateError, setCustomerCreateError] = useState(null);
-  
+
   // Sale related states
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  // State to hold data for a *new* customer not yet saved to backend
   const [newUnsavedCustomerData, setNewUnsavedCustomerData] = useState({ name: '', contact: '', address: '', creditLimit: 0 });
-  const [isNewCustomerMode, setIsNewCustomerMode] = useState(false); // Indicates if selectedCustomer is a new, unsaved one
-  
-  const [saleItems, setSaleItems] = useState([]);
-  const [productSearchTerm, setProductSearchTerm] = useState(''); 
+  const [isNewCustomerMode, setIsNewCustomerMode] = useState(false);
 
-  const [discount, setDiscount] = useState(''); 
+  const [saleItems, setSaleItems] = useState([]);
+  const [productSearchTerm, setProductSearchTerm] = useState('');
+
+  const [discount, setDiscount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentStatus, setPaymentStatus] = useState('paid');
   const [notes, setNotes] = useState('');
   const [receiptImageFile, setReceiptImageFile] = useState(null);
   const [receiptImagePreviewUrl, setReceiptImagePreviewUrl] = useState(null);
-  const [loading, setLoading] = useState(false); // Overall loading state for form submission
+  const [localLoading, setLocalLoading] = useState(false); // Local loading state for form submission
   const [showPrintPrompt, setShowPrintPrompt] = useState(false);
-  const [newlyCreatedSaleData, setNewlyCreatedSaleData] = useState(null); 
-  
+  const [newlyCreatedSaleData, setNewlyCreatedSaleData] = useState(null);
+
   // State for new customer modal visibility
   const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
-  const [customerSearchTerm, setCustomerSearchTerm] = useState(''); 
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
 
   // Fetch initial data on component mount
   useEffect(() => {
-    dispatch(fetchCustomers());
-    dispatch(fetchProducts());
+    dispatch(fetchCustomers({ page: 1, limit: 100 }));
+    dispatch(fetchProducts({ page: 1, limit: 100 }));
   }, [dispatch]);
 
   // Handle new customer creation error (if it happens during direct API call in handleSubmitSale)
   useEffect(() => {
-    if (customerCreateError) { 
+    if (customerCreateError) {
       toast.error(`Error creating new customer: ${customerCreateError}`);
     }
   }, [customerCreateError]);
@@ -80,34 +80,38 @@ const NewSale = () => {
   const handleCustomerSelect = (customer) => {
     setSelectedCustomer(customer);
     setCustomerSearchTerm(customer ? customer.name : '');
-    setIsNewCustomerMode(false); // Not in new customer mode if an existing one is selected
-    setNewUnsavedCustomerData({ name: '', contact: '', address: '', creditLimit: 0 }); // Clear unsaved data
+    setIsNewCustomerMode(false);
+    setNewUnsavedCustomerData({ name: '', contact: '', address: '', creditLimit: 0 });
   };
 
-  // This handler now correctly expects the updated form data object directly
-  const handleNewUnsavedCustomerDataChange = (updatedFormData) => { 
-    setNewUnsavedCustomerData(updatedFormData); // Set the entire updated object
+  const handleNewUnsavedCustomerDataChange = (updatedFormData) => {
+    setNewUnsavedCustomerData(updatedFormData);
   };
 
-  // Function to "save" the new customer data temporarily from modal
-  const handleSaveNewCustomerFromModal = () => {
-    if (!newUnsavedCustomerData.name.trim()) { 
+  const handleSaveNewCustomerFromModal = async () => {
+    if (!newUnsavedCustomerData.name.trim()) {
       toast.error('Customer name is required.');
       return;
     }
-    // Set the new customer data to selectedCustomer for the sale, mark as new
-    setSelectedCustomer({
-      id: null, // No ID yet as not saved to backend
-      name: newUnsavedCustomerData.name,
-      contact: newUnsavedCustomerData.contact,
-      address: newUnsavedCustomerData.address,
-      creditLimit: newUnsavedCustomerData.creditLimit,
-      outstandingBalance: 0, // Default for new customer
-    });
-    setIsNewCustomerMode(true); // Indicate that selectedCustomer is a new, unsaved one
-    setCustomerSearchTerm(newUnsavedCustomerData.name); // Show new customer name in search input field
-    setShowNewCustomerModal(false); // Close the modal
-    toast.info('New customer details captured. Click "Record Sale" to save them along with the sale.');
+
+    setCustomerCreating(true);
+    setCustomerCreateError(null);
+    try {
+      const createdCustomer = await createCustomerApi(newUnsavedCustomerData);
+
+      setSelectedCustomer(createdCustomer);
+      setIsNewCustomerMode(false); // Customer is now saved, so not "new unsaved" anymore
+      setCustomerSearchTerm(createdCustomer.name);
+      dispatch(addNewCustomerAction(createdCustomer)); // Update Redux state with new customer
+      toast.success('New customer saved successfully!');
+      setShowNewCustomerModal(false); // Close the modal
+    } catch (error) {
+      console.error('Failed to create new customer from modal:', error);
+      setCustomerCreateError(error.message || 'Unknown error');
+      toast.error('Failed to create new customer. Please try again.');
+    } finally {
+      setCustomerCreating(false);
+    }
   };
 
   const addProductToSale = (product) => {
@@ -134,11 +138,11 @@ const NewSale = () => {
           price: product.sellingPrice,
           quantity: 1,
           stock: product.stock,
-          nameUrdu: product.nameUrdu 
+          nameUrdu: product.nameUrdu
         }
       ]);
     }
-    setProductSearchTerm(''); 
+    setProductSearchTerm('');
   };
 
   const removeItem = (productId) => {
@@ -184,85 +188,50 @@ const NewSale = () => {
     }
   };
 
-  // Handles submission of the main sale form
   const handleSubmitSale = async (e) => {
     e.preventDefault();
 
-    // FIX: Add this defensive check at the very top to prevent execution if already loading
-    if (loading) {
+    if (localLoading || salesLoading || customerCreating) { // Check all relevant loading states
       console.warn('Form already submitting, ignoring duplicate click.');
       return;
     }
 
-    setLoading(true); // Start overall loading for the submission process
+    setLocalLoading(true);
 
-    let customerIdToUse = selectedCustomer?.id;
-    let finalCustomerName = selectedCustomer?.name; 
-    let finalCustomerContact = selectedCustomer?.contact;
-    let finalCustomerAddress = selectedCustomer?.address;
-
-    // Condition: Create new customer if in new customer mode and ID is null (not yet saved)
-    if (isNewCustomerMode && selectedCustomer && selectedCustomer.id === null) {
-      if (!selectedCustomer.name.trim()) { 
-        toast.error('Customer name is required for a new customer.');
-        setLoading(false); 
-        return;
-      }
-      setCustomerCreating(true); // Indicate customer creation API call is starting
-      setCustomerCreateError(null); 
-      try {
-        const createdCustomer = await createCustomerApi(selectedCustomer); // Call API directly
-        
-        // FIX: Update selectedCustomer with the newly created customer's ID and details
-        setSelectedCustomer(createdCustomer); // <--- THIS IS THE CRUCIAL LINE FOR THE 409 FIX
-        
-        customerIdToUse = createdCustomer.id;
-        finalCustomerName = createdCustomer.name;
-        finalCustomerContact = createdCustomer.contact;
-        finalCustomerAddress = createdCustomer.address;
-        dispatch(addNewCustomer(createdCustomer)); // Update Redux state with new customer
-        toast.success('New customer saved successfully!');
-      } catch (error) {
-        console.error('Failed to create new customer for sale:', error);
-        setCustomerCreateError(error.message || 'Unknown error');
-        toast.error('Failed to create new customer. Sale not recorded.');
-        setLoading(false); // Stop loading if customer creation fails
-        setCustomerCreating(false);
-        return;
-      } finally {
-        setCustomerCreating(false); // Ensure customerCreating is reset
-      }
-    } else if (!customerIdToUse) { 
-      toast.error('Please select an existing customer or create a new one.');
-      setLoading(false); 
+    if (!selectedCustomer) {
+      toast.error('Please select an existing customer or add a new one.');
+      setLocalLoading(false);
       return;
     }
 
     if (saleItems.length === 0) {
       toast.error('Please add at least one product to the sale.');
-      setLoading(false); 
+      setLocalLoading(false);
       return;
     }
 
     const { subTotal, grandTotal } = calculateTotal();
 
     const saleData = {
-      customerId: customerIdToUse,
-      saleDate: new Date().toISOString(), 
+      customerId: selectedCustomer.id, // Use ID from selectedCustomer
+      saleDate: new Date().toISOString(),
       items: saleItems.map(item => ({
         productId: item.productId,
         quantity: item.quantity,
-        priceAtSale: item.price 
+        priceAtSale: item.price
       })),
       discount: parseFloat(discount) || 0,
       paymentMethod: paymentMethod,
       paymentStatus: paymentStatus,
       notes: notes,
-      totalAmount: grandTotal, 
-      subTotal: subTotal, 
-      customerName: finalCustomerName,
-      customerPhone: finalCustomerContact,
-      customerAddress: finalCustomerAddress, 
+      totalAmount: grandTotal,
+      subTotal: subTotal,
+      customerName: selectedCustomer.name, // Pass actual customer details for the sale record
+      customerContact: selectedCustomer.contact,
+      customerAddress: selectedCustomer.address,
+      // Pass these if they are part of your Sale model for consistency
+      customerCreditLimit: selectedCustomer.creditLimit,
+      customerOutstandingBalance: selectedCustomer.outstandingBalance
     };
 
     const formData = new FormData();
@@ -272,68 +241,56 @@ const NewSale = () => {
     }
 
     try {
-      const response = await createSaleApi(formData); // Directly call sale API
-      
-      if (response && response.id) {
-        dispatch(addSale(response)); // Update Redux state with new sale
-        setNewlyCreatedSaleData({ 
-          ...response, 
-          customerName: finalCustomerName, 
-          customerPhone: finalCustomerContact,
-          customerAddress: finalCustomerAddress,
-          items: saleItems.map(item => ({ 
-            ...item,
-            total: item.price * item.quantity, 
-            unitPrice: item.price 
-          }))
-        });
-        setShowPrintPrompt(true); // This should now trigger the print prompt
+      const resultAction = await dispatch(addNewSaleThunk(formData)); // Dispatch the thunk
+      if (addNewSaleThunk.fulfilled.match(resultAction)) {
         toast.success('Sale recorded successfully!');
+        setNewlyCreatedSaleData(resultAction.payload);
+        setShowPrintPrompt(true);
       } else {
-        toast.error('Sale recorded, but response missing ID. Please check backend.');
-        console.error('Unexpected response from createSale:', response);
+        // Error message already handled by toast in the thunk's rejectWithValue
+        console.error('Failed to record sale:', resultAction.payload);
       }
     } catch (error) {
-      console.error('Failed to record sale:', error);
-      // Display a more specific message if it's the 409 Conflict
-      if (error.response && error.response.status === 409) {
-          toast.error('Error: Customer already exists. Sale not recorded.');
-      } else {
-          toast.error(`Failed to record sale: ${error.message || 'Unknown error'}`);
-      }
+      console.error('An unexpected error occurred during sale submission:', error);
+      toast.error('An unexpected error occurred during sale submission.');
     } finally {
-      setLoading(false); // Ensure button is re-enabled whether success or fail
+      setLocalLoading(false);
     }
   };
+
 
   const handlePrintConfirmation = (confirm) => {
     setShowPrintPrompt(false);
     if (confirm && newlyCreatedSaleData) {
-      navigate(`/sales/${newlyCreatedSaleData.id}`); 
+      navigate(`/sales/${newlyCreatedSaleData.id}`);
     } else {
       // Reset all relevant form states
       setSelectedCustomer(null);
-      setNewUnsavedCustomerData({ name: '', contact: '', address: '', creditLimit: 0 }); 
+      setNewUnsavedCustomerData({ name: '', contact: '', address: '', creditLimit: 0 });
       setIsNewCustomerMode(false);
-      setCustomerSearchTerm(''); 
+      setCustomerSearchTerm('');
       setSaleItems([]);
-      setDiscount(''); 
+      setDiscount('');
       setPaymentMethod('cash');
       setPaymentStatus('paid');
       setNotes('');
       setReceiptImageFile(null);
       setReceiptImagePreviewUrl(null);
-      setNewlyCreatedSaleData(null); 
-      navigate('/sales'); 
+      setNewlyCreatedSaleData(null);
+      navigate('/sales');
     }
   };
 
-  if (customersLoading || productsLoading) {
+  // Combine loading states
+  const overallLoading = customersLoading || productsLoading || localLoading || salesLoading;
+  const overallError = customersError || productsError || salesError;
+
+  if (overallLoading) {
     return <Loading />;
   }
 
-  if (productsError || customersError) {
-    return <div className="text-red-500 text-center py-4">Error: {productsError || customersError}</div>;
+  if (overallError) {
+    return <div className="text-red-500 text-center py-4">Error: {overallError}</div>;
   }
 
   return (
@@ -373,8 +330,8 @@ const NewSale = () => {
                   onClick={() => {
                     setSelectedCustomer(null);
                     setCustomerSearchTerm('');
-                    setIsNewCustomerMode(false); 
-                    setNewUnsavedCustomerData({ name: '', contact: '', address: '', creditLimit: 0 }); 
+                    setIsNewCustomerMode(false);
+                    setNewUnsavedCustomerData({ name: '', contact: '', address: '', creditLimit: 0 });
                   }}
                   variant="outline"
                   size="small"
@@ -384,8 +341,8 @@ const NewSale = () => {
                 </Button>
               </div>
             ) : (
-              customerSearchTerm && !customersLoading && customers.filter(c => 
-                c.name.toLowerCase().includes(customerSearchTerm.toLowerCase()) || 
+              customerSearchTerm && !customersLoading && customers.filter(c =>
+                c.name.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
                 c.contact.toLowerCase().includes(customerSearchTerm.toLowerCase())
               ).length === 0 && (
                 <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200 text-yellow-800 text-center">
@@ -425,12 +382,12 @@ const NewSale = () => {
                   </p>
                 </div>
               )}
-              value={productSearchTerm} 
-              onSearch={setProductSearchTerm} 
+              value={productSearchTerm}
+              onSearch={setProductSearchTerm}
             />
 
-            {productSearchTerm && !productsLoading && products.filter(p => 
-              p.name.toLowerCase().includes(productSearchTerm.toLowerCase()) || 
+            {productSearchTerm && !productsLoading && products.filter(p =>
+              p.name.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
               p.sku.toLowerCase().includes(productSearchTerm.toLowerCase())
             ).length === 0 && (
               <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200 text-yellow-800 text-center">
@@ -459,7 +416,7 @@ const NewSale = () => {
                       min="1"
                       value={item.quantity}
                       onChange={(e) => updateQuantity(item.productId, e.target.value)}
-                      className="w-full p-2 border border-gray-300 rounded-md text-center focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-3 border border-gray-300 rounded-md text-center focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
                   <div className="col-span-2 text-right font-semibold text-gray-800">PKR {(item.price * item.quantity).toFixed(2)}</div>
@@ -578,8 +535,8 @@ const NewSale = () => {
             type="submit"
             variant="primary"
             size="large"
-            loading={loading} 
-            disabled={loading || !selectedCustomer || saleItems.length === 0} 
+            loading={localLoading || customerCreating || salesLoading} // Show loading if any is active
+            disabled={localLoading || customerCreating || salesLoading || !selectedCustomer || saleItems.length === 0}
           >
             Record Sale
           </Button>
@@ -590,15 +547,15 @@ const NewSale = () => {
       {showNewCustomerModal && (
         <Modal title="Create New Customer" onClose={() => setShowNewCustomerModal(false)}>
           <CustomerForm
-            as="div" 
-            customer={newUnsavedCustomerData} 
-            onChange={handleNewUnsavedCustomerDataChange} 
-            loading={customerCreating} 
+            as="div"
+            customer={newUnsavedCustomerData}
+            onChange={handleNewUnsavedCustomerDataChange}
+            loading={customerCreating}
           />
           <div className="mt-4 text-right">
-              <Button 
-                  type="button" 
-                  onClick={handleSaveNewCustomerFromModal} 
+              <Button
+                  type="button"
+                  onClick={handleSaveNewCustomerFromModal}
                   disabled={!newUnsavedCustomerData.name.trim() || customerCreating}
               >
                   Add Customer to Sale
