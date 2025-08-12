@@ -1,9 +1,7 @@
-// frontend/src/pages/products/EditProduct.js
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import ProductForm from '../../components/products/ProductForm';
-import productsAPI from '../../api/products';
 import { toast } from 'react-toastify';
 import Loading from '../../components/common/Loading';
 import { fetchProductById, updateExistingProduct } from '../../features/products/productSlice';
@@ -28,7 +26,7 @@ export const EditProduct = () => {
     if (currentProduct) {
       setProductData({
         ...currentProduct,
-        nameUrdu: currentProduct.nameUrdu || '', // Initialize nameUrdu from fetched data
+        nameUrdu: currentProduct.nameUrdu || '',
         sellingPrice: parseFloat(currentProduct.sellingPrice),
         purchasePrice: currentProduct.purchasePrice !== null ? parseFloat(currentProduct.purchasePrice) : '',
         minimumPrice: currentProduct.minimumPrice !== null ? parseFloat(currentProduct.minimumPrice) : '',
@@ -68,13 +66,16 @@ export const EditProduct = () => {
     e.preventDefault();
     setFormLoading(true);
 
+    // Create a copy without the id
+    const { id: productId, ...dataWithoutId } = productData;
+    
     const dataToSubmit = {
-      ...productData,
-      sellingPrice: parseFloat(productData.sellingPrice),
-      purchasePrice: productData.purchasePrice !== '' ? parseFloat(productData.purchasePrice) : null,
-      minimumPrice: productData.minimumPrice !== '' ? parseFloat(productData.minimumPrice) : null,
-      stock: parseInt(productData.stock),
-      expiryDate: productData.expiryDate || null,
+      ...dataWithoutId,
+      sellingPrice: parseFloat(dataWithoutId.sellingPrice),
+      purchasePrice: dataWithoutId.purchasePrice !== '' ? parseFloat(dataWithoutId.purchasePrice) : null,
+      minimumPrice: dataWithoutId.minimumPrice !== '' ? parseFloat(dataWithoutId.minimumPrice) : null,
+      stock: parseInt(dataWithoutId.stock),
+      expiryDate: dataWithoutId.expiryDate || null,
     };
 
     try {
@@ -90,7 +91,7 @@ export const EditProduct = () => {
 
       await dispatch(updateExistingProduct({ id, productData: formData })).unwrap();
       toast.success('Product updated successfully!');
-      navigate('/products');
+      navigate(`/products/${id}`);
     } catch (error) {
       console.error('Failed to update product:', error);
       toast.error(`Failed to update product: ${error.message || 'Unknown error'}`);

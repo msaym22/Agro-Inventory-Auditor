@@ -14,6 +14,8 @@ import authReducer from '../features/auth/authSlice';
 import productReducer from '../features/products/productSlice';
 import customerReducer from '../features/customers/customerSlice';
 import saleReducer from '../features/sales/saleSlice';
+import driveReducer from '../features/drive/driveSlice';
+
 
 const persistConfig = {
   key: 'root',
@@ -29,6 +31,7 @@ export const store = configureStore({
     auth: persistedAuthReducer,
     products: productReducer,
     customers: customerReducer,
+    drive: driveReducer,
     sales: saleReducer,
   },
   middleware: (getDefaultMiddleware) =>

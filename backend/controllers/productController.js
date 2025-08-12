@@ -22,30 +22,44 @@ const createProduct = async (req, res) => {
   }
 };
 
-const updateProduct = async (req, res) => {
+exports.updateProduct = async (req, res) => {
   try {
-    const productData = req.body;
-
+    const productId = req.params.id;
+    let updates = req.body;
+    
     if (req.file) {
-      productData.image = req.file.path;
+      updates.image = req.file.filename;
     }
-
-    const [updated] = await Product.update(productData, {
-      where: { id: req.params.id }
+    
+    // Convert numeric fields
+    if (updates.sellingPrice) updates.sellingPrice = parseFloat(updates.sellingPrice);
+    if (updates.purchasePrice) updates.purchasePrice = parseFloat(updates.purchasePrice);
+    if (updates.minimumPrice) updates.minimumPrice = parseFloat(updates.minimumPrice);
+    if (updates.stock) updates.stock = parseInt(updates.stock);
+    
+    // Remove id if present
+    if (updates.id) delete updates.id;
+    
+    const [updated] = await Product.update(updates, {
+      where: { id: productId }
     });
 
     if (updated) {
-      const updatedProduct = await Product.findByPk(req.params.id);
-      // TODO: Add audit log if needed
+      const updatedProduct = await Product.findByPk(productId);
       res.json(updatedProduct);
     } else {
       res.status(404).json({ error: 'Product not found' });
     }
-  } catch (err) {
-    console.error('Product update failed:', err);
-    res.status(500).json({ error: 'Update failed', details: err.message });
+  } catch (error) {
+    console.error('Update product error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
+
 
 const getProducts = async (req, res) => {
   const { search, category, minPrice, maxPrice, page = 1, limit = 20 } = req.query;

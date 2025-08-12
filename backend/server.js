@@ -1,5 +1,6 @@
 // backend/server.js
 const path = require('path');
+const driveSync = require('./utils/driveSync');
 
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
@@ -27,6 +28,9 @@ app.use(cookieParser());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+const driveRoutes = require('./routes/driveRoutes');
+app.use('/api/drive', driveRoutes);
+
 
 // =====================
 // Database Setup
@@ -71,6 +75,7 @@ app.use('/api/analytics', protect, analyticsRoutes);
 app.use('/api/backup', protect, backupRoutes);
 app.use('/api/payments', protect, paymentRoutes);
 
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
@@ -110,5 +115,25 @@ app.listen(PORT, () => {
   console.log(`CORS configured for: http://localhost:3000`);
   console.log(`Health check available at: http://localhost:${PORT}/api/health`);
 });
+
+(async () => {
+  try {
+    await driveSync.syncDatabase();
+  } catch (error) {
+    console.error('Startup sync error:', error);
+  }
+})();
+
+process.on('SIGINT', async () => {
+  try {
+    await driveSync.syncDatabase();
+    process.exit(0);
+  } catch (error) {
+    console.error('Shutdown sync error:', error);
+    process.exit(1);
+  }
+});
+
+
 
 module.exports = app;

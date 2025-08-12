@@ -1,10 +1,9 @@
-// frontend/src/features/sales/saleSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import salesAPI from '../../api/sales'; // Your existing sales API functions
-import * as analyticsApi from '../../api/analytics'; // All analytics API functions
+import salesAPI from '../../api/sales';
+import analyticsAPI from '../../api/analytics'; // Corrected: Direct import of default export
 
 const initialState = {
-  items: [], // For sales list (renamed from 'sales' for clarity)
+  items: [], // Renamed from 'sales' to 'items' for clarity in lists
   pagination: {
     currentPage: 1,
     itemsPerPage: 20,
@@ -16,28 +15,28 @@ const initialState = {
     totalSales: 0,
     totalRevenue: '0.00', // Initialize as string to match formatCurrency output
     totalProfit: '0.00', // Initialize as string
-    salesByPeriod: [], // For sales trend
-    productSales: [],  // For top products by revenue
-    profitByProduct: [], // For profit by product
-    salesByCustomer: [], // For sales by customer
-    productsByQuantitySold: [], // NEW: For products sorted by quantity sold
+    salesByPeriod: [],
+    productSales: [], // This is top products by revenue (already existed)
+    profitByProduct: [],
+    salesByCustomer: [],
+    productsByQuantitySold: [], // NEW state for products by quantity sold
+    customerHistory: null, // NEW state for detailed customer history
+    productHistory: null, // NEW state for detailed product history
+    loading: false, // Loading state for analytics data specifically
+    error: null, // Error state for analytics data
   },
   loading: false, // General loading for sales list/current sale
-  analyticsLoading: false, // Specific loading for analytics section
   error: null,
-  analyticsError: null, // Specific error for analytics section
 };
-
-// --- CRUD Operations for Sales (Thunks) ---
 
 export const fetchSales = createAsyncThunk(
   'sales/fetchSales',
   async (params, { rejectWithValue }) => {
     try {
       const response = await salesAPI.getSales(params);
-      return response; // API returns { sales: [], pagination: {} }
+      return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to fetch sales');
+      return rejectWithValue(err.response?.data || 'Failed to fetch sales');
     }
   }
 );
@@ -47,13 +46,9 @@ export const addNewSale = createAsyncThunk(
   async (saleData, { rejectWithValue }) => {
     try {
       const response = await salesAPI.createSale(saleData);
-      return response; // API returns the new sale object
+      return response;
     } catch (err) {
-      // Check if it's a 409 Conflict error specifically
-      if (err.response && err.response.status === 409) {
-        return rejectWithValue('Customer already exists. Please select them or use a different name.');
-      }
-      return rejectWithValue(err.response?.data?.message || 'Failed to create sale');
+      return rejectWithValue(err.response?.data || 'Failed to create sale');
     }
   }
 );
@@ -65,7 +60,7 @@ export const fetchSaleById = createAsyncThunk(
       const response = await salesAPI.getSaleById(id);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to fetch sale');
+      return rejectWithValue(err.response?.data || 'Failed to fetch sale');
     }
   }
 );
@@ -77,7 +72,7 @@ export const updateExistingSale = createAsyncThunk(
       const response = await salesAPI.updateSale(id, saleData);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to update sale');
+      return rejectWithValue(err.response?.data || 'Failed to update sale');
     }
   }
 );
@@ -89,75 +84,95 @@ export const deleteExistingSale = createAsyncThunk(
       await salesAPI.deleteSale(id);
       return id;
     } catch (err) {
-      return rejectWithValue(err.response?.data?.message || 'Failed to delete sale');
+      return rejectWithValue(err.response?.data || 'Failed to delete sale');
     }
   }
 );
 
-
-// --- Analytics Thunks ---
-
+// Analytics Thunks - now correctly calling analyticsAPI methods directly
 export const fetchSalesAnalytics = createAsyncThunk(
   'sales/fetchSalesAnalytics',
-  async (period, { rejectWithValue }) => {
+  async (params = {}, { rejectWithValue }) => { // Accept params object
     try {
-      const response = await analyticsApi.getSalesAnalytics(period);
-      return response; // Backend returns { totalSales, totalRevenue, salesByPeriod, productSales }
-    } catch (error) {
-      const message = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to fetch sales analytics';
-      return rejectWithValue(message);
+      const response = await analyticsAPI.getSalesAnalytics(params);
+      return response || {};
+    } catch (err) {
+      return rejectWithValue(err.response?.data || 'Failed to fetch sales analytics');
     }
   }
 );
 
 export const fetchOverallProfit = createAsyncThunk(
   'sales/fetchOverallProfit',
-  async (period, { rejectWithValue }) => { // Pass period
+  async (params = {}, { rejectWithValue }) => { // Accept params object
     try {
-      const response = await analyticsApi.getOverallProfit(period);
-      return response; // Backend returns { totalProfit }
-    } catch (error) {
-      const message = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to fetch overall profit';
-      return rejectWithValue(message);
+      const response = await analyticsAPI.getOverallProfit(params);
+      return response || {};
+    } catch (err) {
+      return rejectWithValue(err.response?.data || 'Failed to fetch overall profit');
     }
   }
 );
 
 export const fetchProfitByProduct = createAsyncThunk(
   'sales/fetchProfitByProduct',
-  async (period, { rejectWithValue }) => { // Pass period
+  async (params = {}, { rejectWithValue }) => { // Accept params object
     try {
-      const response = await analyticsApi.getProfitByProduct(period);
-      return response; // Backend returns { profitByProduct: [] }
-    } catch (error) {
-      const message = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to fetch profit by product';
-      return rejectWithValue(message);
+      const response = await analyticsAPI.getProfitByProduct(params);
+      return response || {};
+    } catch (err) {
+      return rejectWithValue(err.response?.data || 'Failed to fetch profit by product');
     }
   }
 );
 
 export const fetchSalesByCustomerWithQuantity = createAsyncThunk(
   'sales/fetchSalesByCustomerWithQuantity',
-  async (period, { rejectWithValue }) => { // Pass period
+  async (params = {}, { rejectWithValue }) => { // Accept params object
     try {
-      const response = await analyticsApi.getSalesByCustomerWithQuantity(period);
-      return response; // Backend returns { salesByCustomer: [] }
-    } catch (error) {
-      const message = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to fetch sales by customer';
-      return rejectWithValue(message);
+      const response = await analyticsAPI.getSalesByCustomerWithQuantity(params);
+      return response || {};
+    } catch (err) {
+      return rejectWithValue(err.response?.data || 'Failed to fetch sales by customer');
     }
   }
 );
 
-export const fetchProductsByQuantitySold = createAsyncThunk( // NEW THUNK
+// NEW: Thunk to fetch products by quantity sold
+export const fetchProductsByQuantitySold = createAsyncThunk(
   'sales/fetchProductsByQuantitySold',
-  async (period, { rejectWithValue }) => { // Pass period
+  async (params = {}, { rejectWithValue }) => { // Accept params object
     try {
-      const response = await analyticsApi.getProductsByQuantitySold(period);
-      return response; // Backend returns { productsByQuantitySold: [] }
-    } catch (error) {
-      const message = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to fetch products by quantity sold';
-      return rejectWithValue(message);
+      const response = await analyticsAPI.getProductsByQuantitySold(params);
+      return response || {};
+    } catch (err) {
+      return rejectWithValue(err.response?.data || 'Failed to fetch products by quantity sold');
+    }
+  }
+);
+
+// NEW: Thunk to fetch detailed customer history
+export const fetchCustomerHistory = createAsyncThunk(
+  'sales/fetchCustomerHistory',
+  async ({ customerId, params = {} }, { rejectWithValue }) => { // Accepts customerId and optional params
+    try {
+      const response = await analyticsAPI.getCustomerHistory(customerId, params);
+      return response || {};
+    } catch (err) {
+      return rejectWithValue(err.response?.data || 'Failed to fetch customer history');
+    }
+  }
+);
+
+// NEW: Thunk to fetch detailed product history
+export const fetchProductHistory = createAsyncThunk(
+  'sales/fetchProductHistory',
+  async ({ productId, params = {} }, { rejectWithValue }) => { // Accepts productId and optional params
+    try {
+      const response = await analyticsAPI.getProductHistory(productId, params);
+      return response || {};
+    } catch (err) {
+      return rejectWithValue(err.response?.data || 'Failed to fetch product history');
     }
   }
 );
@@ -167,25 +182,27 @@ const salesSlice = createSlice({
   name: 'sales',
   initialState,
   reducers: {
-    // These are plain Redux actions
     addSale: (state, action) => {
       if (!Array.isArray(state.items)) {
         state.items = [];
       }
       state.items.unshift(action.payload);
-      state.pagination.totalItems += 1;
     },
     removeSale: (state, action) => {
       if (!Array.isArray(state.items)) {
         state.items = [];
       }
       state.items = state.items.filter((sale) => sale.id !== action.payload);
-      state.pagination.totalItems = Math.max(0, state.pagination.totalItems - 1);
     },
+    // Reducer to clear detailed history when modal is closed or not needed
+    clearDetailedHistory: (state) => {
+      state.salesAnalytics.customerHistory = null;
+      state.salesAnalytics.productHistory = null;
+    }
   },
   extraReducers: (builder) => {
     builder
-      // --- Handle fetchSales (for sales list) ---
+      // Handle fetchSales
       .addCase(fetchSales.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -202,7 +219,7 @@ const salesSlice = createSlice({
         state.items = [];
         state.pagination = initialState.pagination;
       })
-      // --- Handle addNewSale ---
+      // Handle addNewSale
       .addCase(addNewSale.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -213,13 +230,12 @@ const salesSlice = createSlice({
           state.items = [];
         }
         state.items.unshift(action.payload);
-        state.pagination.totalItems += 1;
       })
       .addCase(addNewSale.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
-      // --- Handle fetchSaleById ---
+      // Handle fetchSaleById
       .addCase(fetchSaleById.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -233,7 +249,7 @@ const salesSlice = createSlice({
         state.error = action.payload;
         state.currentSale = null;
       })
-      // --- Handle updateExistingSale ---
+      // Handle updateExistingSale
       .addCase(updateExistingSale.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -254,108 +270,121 @@ const salesSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      // --- Handle deleteExistingSale ---
-      .addCase(deleteExistingSale.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(deleteExistingSale.fulfilled, (state, action) => {
-        state.loading = false;
-        if (Array.isArray(state.items)) {
-          state.items = state.items.filter((sale) => sale.id !== action.payload);
-        }
-        state.pagination.totalItems = Math.max(0, state.pagination.totalItems - 1);
-      })
-      .addCase(deleteExistingSale.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-
-      // --- Analytics Thunks Handling ---
-      // fetchSalesAnalytics
+      // Handle fetchSalesAnalytics
       .addCase(fetchSalesAnalytics.pending, (state) => {
-        state.analyticsLoading = true; // Use specific analytics loading state
-        state.analyticsError = null;
+        state.salesAnalytics.loading = true;
+        state.salesAnalytics.error = null;
       })
       .addCase(fetchSalesAnalytics.fulfilled, (state, action) => {
         const payload = action.payload ?? {};
-        state.analyticsLoading = false;
+        state.salesAnalytics.loading = false;
         state.salesAnalytics.totalSales = payload.totalSales ?? 0;
         state.salesAnalytics.totalRevenue = payload.totalRevenue ?? '0.00';
         state.salesAnalytics.salesByPeriod = payload.salesByPeriod ?? [];
         state.salesAnalytics.productSales = payload.productSales ?? [];
       })
       .addCase(fetchSalesAnalytics.rejected, (state, action) => {
-        state.analyticsLoading = false;
-        state.analyticsError = action.payload;
+        state.salesAnalytics.loading = false;
+        state.salesAnalytics.error = action.payload;
+        // Reset affected analytics data on error
         state.salesAnalytics.totalSales = 0;
         state.salesAnalytics.totalRevenue = '0.00';
         state.salesAnalytics.salesByPeriod = [];
         state.salesAnalytics.productSales = [];
       })
-      // fetchOverallProfit
+      // Handle fetchOverallProfit
       .addCase(fetchOverallProfit.pending, (state) => {
-        state.analyticsLoading = true;
-        state.analyticsError = null;
+        state.salesAnalytics.loading = true;
+        state.salesAnalytics.error = null;
       })
       .addCase(fetchOverallProfit.fulfilled, (state, action) => {
         const payload = action.payload ?? {};
-        state.analyticsLoading = false;
+        state.salesAnalytics.loading = false;
         state.salesAnalytics.totalProfit = payload.totalProfit ?? '0.00';
       })
       .addCase(fetchOverallProfit.rejected, (state, action) => {
-        state.analyticsLoading = false;
-        state.analyticsError = action.payload;
+        state.salesAnalytics.loading = false;
+        state.salesAnalytics.error = action.payload;
         state.salesAnalytics.totalProfit = '0.00';
       })
-      // fetchProfitByProduct
+      // Handle fetchProfitByProduct
       .addCase(fetchProfitByProduct.pending, (state) => {
-        state.analyticsLoading = true;
-        state.analyticsError = null;
+        state.salesAnalytics.loading = true;
+        state.salesAnalytics.error = null;
       })
       .addCase(fetchProfitByProduct.fulfilled, (state, action) => {
         const payload = action.payload ?? {};
-        state.analyticsLoading = false;
+        state.salesAnalytics.loading = false;
         state.salesAnalytics.profitByProduct = payload.profitByProduct ?? [];
       })
       .addCase(fetchProfitByProduct.rejected, (state, action) => {
-        state.analyticsLoading = false;
-        state.analyticsError = action.payload;
+        state.salesAnalytics.loading = false;
+        state.salesAnalytics.error = action.payload;
         state.salesAnalytics.profitByProduct = [];
       })
-      // fetchSalesByCustomerWithQuantity
+      // Handle fetchSalesByCustomerWithQuantity
       .addCase(fetchSalesByCustomerWithQuantity.pending, (state) => {
-        state.analyticsLoading = true;
-        state.analyticsError = null;
+        state.salesAnalytics.loading = true;
+        state.salesAnalytics.error = null;
       })
       .addCase(fetchSalesByCustomerWithQuantity.fulfilled, (state, action) => {
         const payload = action.payload ?? {};
-        state.analyticsLoading = false;
+        state.salesAnalytics.loading = false;
         state.salesAnalytics.salesByCustomer = payload.salesByCustomer ?? [];
       })
       .addCase(fetchSalesByCustomerWithQuantity.rejected, (state, action) => {
-        state.analyticsLoading = false;
-        state.analyticsError = action.payload;
+        state.salesAnalytics.loading = false;
+        state.salesAnalytics.error = action.payload;
         state.salesAnalytics.salesByCustomer = [];
       })
-      // NEW: fetchProductsByQuantitySold
+      // NEW: Handle fetchProductsByQuantitySold
       .addCase(fetchProductsByQuantitySold.pending, (state) => {
-        state.analyticsLoading = true;
-        state.analyticsError = null;
+        state.salesAnalytics.loading = true;
+        state.salesAnalytics.error = null;
       })
       .addCase(fetchProductsByQuantitySold.fulfilled, (state, action) => {
         const payload = action.payload ?? {};
-        state.analyticsLoading = false;
+        state.salesAnalytics.loading = false;
         state.salesAnalytics.productsByQuantitySold = payload.productsByQuantitySold ?? [];
       })
       .addCase(fetchProductsByQuantitySold.rejected, (state, action) => {
-        state.analyticsLoading = false;
-        state.analyticsError = action.payload;
+        state.salesAnalytics.loading = false;
+        state.salesAnalytics.error = action.payload;
         state.salesAnalytics.productsByQuantitySold = [];
+      })
+      // NEW: Handle fetchCustomerHistory
+      .addCase(fetchCustomerHistory.pending, (state) => {
+        state.salesAnalytics.loading = true;
+        state.salesAnalytics.error = null;
+        state.salesAnalytics.customerHistory = null; // Clear previous history
+      })
+      .addCase(fetchCustomerHistory.fulfilled, (state, action) => {
+        state.salesAnalytics.loading = false;
+        state.salesAnalytics.customerHistory = action.payload;
+      })
+      .addCase(fetchCustomerHistory.rejected, (state, action) => {
+        state.salesAnalytics.loading = false;
+        state.salesAnalytics.error = action.payload;
+        state.salesAnalytics.customerHistory = null;
+      })
+      // NEW: Handle fetchProductHistory
+      .addCase(fetchProductHistory.pending, (state) => {
+        state.salesAnalytics.loading = true;
+        state.salesAnalytics.error = null;
+        state.salesAnalytics.productHistory = null; // Clear previous history
+      })
+      .addCase(fetchProductHistory.fulfilled, (state, action) => {
+        state.salesAnalytics.loading = false;
+        state.salesAnalytics.productHistory = action.payload;
+      })
+      .addCase(fetchProductHistory.rejected, (state, action) => {
+        state.salesAnalytics.loading = false;
+        state.salesAnalytics.error = action.payload;
+        state.salesAnalytics.productHistory = null;
       });
   },
 });
 
-export const { addSale, removeSale } = salesSlice.actions; // Export original reducers
+export const { addSale, removeSale, clearDetailedHistory } = salesSlice.actions;
 
 export default salesSlice.reducer;

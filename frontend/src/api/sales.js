@@ -1,64 +1,38 @@
-// src/api/sales.js
 import api from './api';
 
 export const createSale = async (saleData) => {
-  try {
-    const response = await api.post('/sales', saleData);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+  const response = await api.post('sales', saleData);
+  return response.data;
 };
 
 export const getSales = async (params = {}) => {
-  try {
-    const response = await api.get('/sales', { params });
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+  const response = await api.get('sales', { params });
+  return response.data;
 };
 
 export const getSaleById = async (id) => {
-  try {
-    const response = await api.get(`/sales/${id}`);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+  const response = await api.get(`sales/${id}`);
+  return response.data;
 };
 
 export const updateSale = async (id, saleData) => {
-  try {
-    const response = await api.put(`/sales/${id}`, saleData);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+  const response = await api.put(`sales/${id}`, saleData);
+  return response.data;
 };
 
 export const deleteSale = async (id) => {
-  try {
-    const response = await api.delete(`/sales/${id}`);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+  const response = await api.delete(`sales/${id}`);
+  return response.data;
 };
 
 export const generateInvoice = async (saleId) => {
-  try {
-    const response = await api.get(`/sales/${saleId}/invoice`); // REMOVED: responseType: 'blob'
-    return response.data; // This will now be the parsed JSON object
-  } catch (error) {
-    throw error;
-  }
+  const response = await api.get(`sales/${saleId}/invoice`);
+  return response.data;
 };
 
-// Add aliases for the expected function names
+// Aliases for consistency
 export const fetchSales = getSales;
 
-// Export as default object (salesAPI)
 const salesAPI = {
   createSale,
   getSales,

@@ -1,65 +1,93 @@
-// frontend/src/api/analytics.js
 import api from './api';
 
-export const getSalesAnalytics = async (period = 'monthly') => {
-  try {
-    const response = await api.get(`/analytics/sales?period=${period}`);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
+// Analytics API calls
+const analyticsAPI = {
+  // Existing analytics calls, updated to accept params object for period/dates
+  getSalesAnalytics: async (params = {}) => {
+    try {
+      const response = await api.get('/analytics/sales', { params });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  getOverallProfit: async (params = {}) => {
+    try {
+      const response = await api.get('/analytics/profit/overall', { params });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  getProfitByProduct: async (params = {}) => {
+    try {
+      const response = await api.get('/analytics/profit/by-product', { params });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  getSalesByCustomerWithQuantity: async (params = {}) => {
+    try {
+      const response = await api.get('/analytics/sales/by-customer-quantity', { params });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // NEW: API call to fetch products by quantity sold
+  getProductsByQuantitySold: async (params = {}) => {
+    try {
+      const response = await api.get('/analytics/products/quantity-sold', { params });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // NEW: API call to fetch detailed sales history for a specific customer
+  getCustomerHistory: async (customerId, params = {}) => {
+    try {
+      const response = await api.get(`/analytics/customer-history/${customerId}`, { params });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // NEW: API call to fetch detailed sales history for a specific product
+  getProductHistory: async (productId, params = {}) => {
+    try {
+      const response = await api.get(`/analytics/product-history/${productId}`, { params });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Existing additional analytics endpoints (if any) - ensure params are handled if they support filtering
+  getInventoryValuation: async () => {
+    // This endpoint currently does not support period/date filters based on your controller
+    try {
+      const response = await api.get('/analytics/inventory-valuation');
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  getMonthlySalesReport: async (params = {}) => {
+    try {
+      const response = await api.get('/analytics/monthly-sales-report', { params });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
 };
 
-export const getOverallProfit = async (period) => { // Accept period
-  try {
-    const response = await api.get(`/analytics/profit/overall${period ? `?period=${period}` : ''}`);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
-export const getProfitByProduct = async (period) => { // Accept period
-  try {
-    const response = await api.get(`/analytics/profit/by-product${period ? `?period=${period}` : ''}`);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
-export const getSalesByCustomerWithQuantity = async (period) => { // Accept period
-  try {
-    const response = await api.get(`/analytics/sales/by-customer-quantity${period ? `?period=${period}` : ''}`);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
-export const getProductsByQuantitySold = async (period) => { // NEW FUNCTION
-  try {
-    const response = await api.get(`/analytics/products/by-quantity-sold${period ? `?period=${period}` : ''}`);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
-export const getInventoryValuation = async () => {
-  try {
-    const response = await api.get('/analytics/inventory-valuation');
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
-
-export const getMonthlySalesReport = async () => {
-  try {
-    const response = await api.get('/analytics/monthly-sales-report');
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-};
+export default analyticsAPI;

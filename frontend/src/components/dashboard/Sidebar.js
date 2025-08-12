@@ -1,9 +1,17 @@
-// frontend/src/components/dashboard/Sidebar.js
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { FaTachometerAlt, FaBoxOpen, FaUsers, FaShoppingCart, FaChartBar, FaDatabase, FaSignOutAlt } from 'react-icons/fa';
+import { 
+  FaTachometerAlt, 
+  FaBoxOpen, 
+  FaUsers, 
+  FaShoppingCart, 
+  FaChartBar, 
+  FaDatabase, 
+  FaSignOutAlt,
+  FaCog 
+} from 'react-icons/fa';
 
-const Sidebar = ({ onLogout, onShowAnalyticsLogin }) => { // Added onShowAnalyticsLogin prop
+const Sidebar = ({ onLogout, onShowAnalyticsLogin }) => {
   const linkClasses = "flex items-center px-4 py-3 text-gray-700 rounded-lg hover:bg-green-100 hover:text-green-800 transition-colors";
   const activeLinkClasses = "bg-green-200 text-green-900 font-bold";
 
@@ -29,10 +37,9 @@ const Sidebar = ({ onLogout, onShowAnalyticsLogin }) => { // Added onShowAnalyti
           <FaShoppingCart className="mr-3" />
           Sales
         </NavLink>
-        {/* Changed from NavLink to a div with onClick handler */}
         <div
-          onClick={onShowAnalyticsLogin} // Call the function passed from parent
-          className={`${linkClasses} cursor-pointer`} // Add cursor-pointer for better UX
+          onClick={onShowAnalyticsLogin}
+          className={`${linkClasses} cursor-pointer`}
         >
           <FaChartBar className="mr-3" />
           Analytics
@@ -40,6 +47,11 @@ const Sidebar = ({ onLogout, onShowAnalyticsLogin }) => { // Added onShowAnalyti
         <NavLink to="/backup-restore" className={({ isActive }) => `${linkClasses} ${isActive ? activeLinkClasses : ''}`}>
           <FaDatabase className="mr-3" />
           Backup & Restore
+        </NavLink>
+        {/* ADDED SETTINGS LINK */}
+        <NavLink to="/settings/drive" className={({ isActive }) => `${linkClasses} ${isActive ? activeLinkClasses : ''}`}>
+          <FaCog className="mr-3" />
+          Settings
         </NavLink>
       </nav>
       <div className="p-4 border-t">
