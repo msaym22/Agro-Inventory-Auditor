@@ -28,7 +28,11 @@ const restoreBackup = async (req, res) => {
     fs.mkdirSync(backupDir, { recursive: true });
   }
 
-  const filePath = path.join(backupDir, backupFile.filename);
+  // If Multer saved to backupsDir already, prefer that path; otherwise construct full path
+  const savedPath = backupFile.path ? path.resolve(backupFile.path) : null;
+  const filePath = savedPath && fs.existsSync(savedPath)
+    ? savedPath
+    : path.join(backupDir, backupFile.filename);
 
   try {
     const encryptedDataString = fs.readFileSync(filePath, 'utf8');

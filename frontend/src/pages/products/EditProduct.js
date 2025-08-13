@@ -4,7 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import ProductForm from '../../components/products/ProductForm';
 import { toast } from 'react-toastify';
 import Loading from '../../components/common/Loading';
-import { fetchProductById, updateExistingProduct } from '../../features/products/productSlice';
+import { fetchProductById, updateProduct } from '../../features/products/productSlice';
 
 export const EditProduct = () => {
   const { id } = useParams();
@@ -34,7 +34,10 @@ export const EditProduct = () => {
         expiryDate: currentProduct.expiryDate ? new Date(currentProduct.expiryDate).toISOString().split('T')[0] : '',
       });
       if (currentProduct.image) {
-        setImagePreviewUrl(`/uploads/${currentProduct.image}`);
+        // currentProduct.image is already a relative path like 'uploads/filename.png'
+        // Server statically serves '/uploads' at backend, so prepend only one '/'
+        const normalized = currentProduct.image.startsWith('/') ? currentProduct.image : `/${currentProduct.image}`;
+        setImagePreviewUrl(normalized);
       } else {
         setImagePreviewUrl(null);
       }
@@ -54,7 +57,9 @@ export const EditProduct = () => {
     if (file) {
       setImagePreviewUrl(URL.createObjectURL(file));
     } else {
-      setImagePreviewUrl(currentProduct?.image ? `/uploads/${currentProduct.image}` : null);
+      const img = currentProduct?.image;
+      const normalized = img ? (img.startsWith('/') ? img : `/${img}`) : null;
+      setImagePreviewUrl(normalized);
     }
   };
 
@@ -66,17 +71,19 @@ export const EditProduct = () => {
     e.preventDefault();
     setFormLoading(true);
 
-    // Create a copy without the id
-    const { id: productId, ...dataWithoutId } = productData;
-    
     const dataToSubmit = {
-      ...dataWithoutId,
-      sellingPrice: parseFloat(dataWithoutId.sellingPrice),
-      purchasePrice: dataWithoutId.purchasePrice !== '' ? parseFloat(dataWithoutId.purchasePrice) : null,
-      minimumPrice: dataWithoutId.minimumPrice !== '' ? parseFloat(dataWithoutId.minimumPrice) : null,
-      stock: parseInt(dataWithoutId.stock),
-      expiryDate: dataWithoutId.expiryDate || null,
+      ...productData,
+      sellingPrice: parseFloat(productData.sellingPrice),
+      // If the field is empty, send 0 instead of null
+      purchasePrice: productData.purchasePrice !== '' ? parseFloat(productData.purchasePrice) : 0,
+      minimumPrice: productData.minimumPrice !== '' ? parseFloat(productData.minimumPrice) : 0,
+      stock: parseInt(productData.stock),
+      expiryDate: productData.expiryDate || null,
     };
+    
+    // The API endpoint doesn't need the id in the formData, but it's used in the URL.
+    // We can safely omit it from the payload.
+    delete dataToSubmit.id;
 
     try {
       const formData = new FormData();
@@ -89,7 +96,7 @@ export const EditProduct = () => {
         formData.append('image', imageFile);
       }
 
-      await dispatch(updateExistingProduct({ id, productData: formData })).unwrap();
+      await dispatch(updateProduct({ id, productData: formData })).unwrap();
       toast.success('Product updated successfully!');
       navigate(`/products/${id}`);
     } catch (error) {

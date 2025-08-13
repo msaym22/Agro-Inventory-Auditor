@@ -1,6 +1,7 @@
 // backend/controllers/customerController.js
-const { Customer, Sale, SaleItem, Product, Payment } = require('../models'); // Added Payment import
+const db = require('../models'); // dynamic models to survive reloads
 const { Op } = require('sequelize');
+const XLSX = require('xlsx');
 
 // Get all customers with pagination and search
 exports.getCustomers = async (req, res) => {
@@ -18,7 +19,7 @@ exports.getCustomers = async (req, res) => {
       ]
     } : {};
 
-    const { count, rows } = await Customer.findAndCountAll({
+    const { count, rows } = await db.Customer.findAndCountAll({
       where: whereClause,
       limit,
       offset,
@@ -36,6 +37,40 @@ exports.getCustomers = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching customers:', error);
+    // If the database connection was closed (e.g., during Drive pull), reload and retry once
+    const msg = error && (error.message || '').toString();
+    if (msg.includes('ConnectionManager.getConnection') && msg.includes('closed')) {
+      try {
+        const db = require('../models');
+        const reloaded = await (db.reloadSequelize?.() || Promise.resolve(false));
+        if (reloaded) {
+          const whereClause = search ? {
+            [Op.or]: [
+              { name: { [Op.iLike]: `%${search}%` } },
+              { contact: { [Op.iLike]: `%${search}%` } },
+              { address: { [Op.iLike]: `%${search}%` } }
+            ]
+          } : {};
+          const { count, rows } = await db.Customer.findAndCountAll({
+            where: whereClause,
+            limit,
+            offset,
+            order: [['createdAt', 'DESC']]
+          });
+          return res.json({
+            customers: rows,
+            pagination: {
+              currentPage: page,
+              totalPages: Math.ceil(count / limit),
+              totalItems: count,
+              itemsPerPage: limit
+            }
+          });
+        }
+      } catch (e) {
+        console.error('Retry after DB reload failed:', e);
+      }
+    }
     res.status(500).json({ error: 'Failed to fetch customers' });
   }
 };
@@ -43,40 +78,34 @@ exports.getCustomers = async (req, res) => {
 // Get a single customer by ID
 exports.getCustomerById = async (req, res) => {
   try {
-    const customer = await Customer.findByPk(req.params.id, {
+    const customer = await db.Customer.findByPk(req.params.id, {
       include: [
         {
-          model: Sale,
+          model: db.Sale,
           as: 'sales',
           include: [
             {
-              model: SaleItem,
+              model: db.SaleItem,
               as: 'items',
-              include: [{ model: Product, as: 'product' }]
+              include: [{ model: db.Product, as: 'product' }]
             }
           ]
         },
         // Include Payment model here to fetch payment history
         {
-          model: Payment,
+          model: db.Payment,
           as: 'payments', // This 'as' must match the alias defined in your Customer model association
           order: [['paymentDate', 'DESC']]
         }
       ],
       order: [
-        [{ model: Sale, as: 'sales' }, 'saleDate', 'DESC']
+        [{ model: db.Sale, as: 'sales' }, 'saleDate', 'DESC']
       ]
     });
     if (!customer) {
       return res.status(404).json({ error: 'Customer not found' });
     }
-
-    // Calculate total payments and update outstanding balance if needed
-    const totalPayments = customer.payments ? customer.payments.reduce((acc, payment) => acc + parseFloat(payment.amount), 0) : 0;
-    const totalSalesAmount = customer.sales ? customer.sales.reduce((acc, sale) => acc + parseFloat(sale.totalAmount), 0) : 0;
-    
-    customer.dataValues.outstandingBalance = (totalSalesAmount - totalPayments).toFixed(2);
-
+    // Do NOT recompute outstandingBalance here; trust the persisted value
     res.json(customer);
   } catch (error) {
     console.error('Error fetching customer by ID:', error);
@@ -91,7 +120,7 @@ exports.createCustomer = async (req, res) => {
 
   try {
     // Attempt to find an existing customer by name and contact
-    const [customer, created] = await Customer.findOrCreate({
+    const [customer, created] = await db.Customer.findOrCreate({
       where: {
         name: name,
         // Only include contact in the unique check if it's provided and not empty
@@ -136,7 +165,7 @@ exports.createCustomer = async (req, res) => {
 // Update a customer by ID
 exports.updateCustomer = async (req, res) => {
   try {
-    const [updatedRows] = await Customer.update(req.body, {
+    const [updatedRows] = await db.Customer.update(req.body, {
       where: { id: req.params.id },
       returning: true
     });
@@ -145,7 +174,7 @@ exports.updateCustomer = async (req, res) => {
       return res.status(404).json({ error: 'Customer not found' });
     }
 
-    const updatedCustomer = await Customer.findByPk(req.params.id);
+    const updatedCustomer = await db.Customer.findByPk(req.params.id);
     res.json(updatedCustomer);
   } catch (error) {
     console.error('Error updating customer:', error);
@@ -157,7 +186,7 @@ exports.updateCustomer = async (req, res) => {
 exports.updateCustomerBalance = async (req, res) => {
   const { outstandingBalance } = req.body;
   try {
-    const customer = await Customer.findByPk(req.params.id);
+    const customer = await db.Customer.findByPk(req.params.id);
     if (!customer) {
       return res.status(404).json({ error: 'Customer not found' });
     }
@@ -171,20 +200,103 @@ exports.updateCustomerBalance = async (req, res) => {
   }
 };
 
-// Delete a customer by ID
+// Delete a customer by ID (cascade delete linked sales, sale items, and payments)
 exports.deleteCustomer = async (req, res) => {
+  let transaction;
   try {
-    const deletedRows = await Customer.destroy({
-      where: { id: req.params.id }
+    transaction = await db.Customer.sequelize.transaction();
+
+    const customer = await db.Customer.findByPk(req.params.id, {
+      include: [
+        { model: db.Sale, as: 'sales', include: [{ model: db.SaleItem, as: 'items' }] },
+        { model: db.Payment, as: 'payments' }
+      ],
+      transaction
     });
 
-    if (deletedRows === 0) {
+    if (!customer) {
+      await transaction.rollback();
       return res.status(404).json({ error: 'Customer not found' });
     }
 
-    res.status(204).send();
+    // Restore stock for all products for each sale, delete sale items and sales
+    for (const sale of customer.sales || []) {
+      const saleItems = sale.items || [];
+      for (const item of saleItems) {
+        const product = await db.Product.findByPk(item.productId, { transaction });
+        if (product) {
+          product.stock = (product.stock || 0) + item.quantity;
+          await product.save({ transaction });
+        }
+      }
+      // Delete sale items then the sale itself
+      await db.SaleItem.destroy({ where: { saleId: sale.id }, transaction });
+      await db.Sale.destroy({ where: { id: sale.id }, transaction });
+    }
+
+    // Delete all payments linked to this customer (whether tied to sales or not)
+    await db.Payment.destroy({ where: { customerId: customer.id }, transaction });
+
+    // Finally delete the customer
+    await db.Customer.destroy({ where: { id: customer.id }, transaction });
+
+    await transaction.commit();
+    return res.status(204).send();
   } catch (error) {
-    console.error('Error deleting customer:', error);
-    res.status(500).json({ error: 'Failed to delete customer' });
+    if (transaction) await transaction.rollback();
+    console.error('Error deleting customer (cascade):', error);
+    return res.status(500).json({ error: 'Failed to delete customer', details: error.message });
+  }
+};
+
+// Import customers from Excel
+exports.importCustomers = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    const workbook = XLSX.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null });
+
+    const results = { created: 0, updated: 0, skipped: 0 };
+
+    for (const row of rows) {
+      const name = row.name || row.Name || row.customer || row.Customer;
+      if (!name) { results.skipped++; continue; }
+
+      const contact = row.contact || row.Contact || null;
+      const address = row.address || row.Address || null;
+      const creditLimit = row.creditLimit != null ? parseFloat(row.creditLimit) : null;
+
+      const where = contact ? { name, contact } : { name };
+      const existing = await Customer.findOne({ where });
+      const payload = {
+        name,
+        contact,
+        address,
+        creditLimit: creditLimit != null ? creditLimit : undefined
+      };
+      Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+
+      if (existing) {
+        await existing.update(payload);
+        results.updated++;
+      } else {
+        await Customer.create({
+          name,
+          contact,
+          address,
+          creditLimit: payload.creditLimit || 0,
+          outstandingBalance: 0
+        });
+        results.created++;
+      }
+    }
+
+    res.json({ message: 'Import completed', results });
+  } catch (err) {
+    console.error('Import customers failed:', err);
+    res.status(500).json({ error: 'Import failed', details: err.message });
   }
 };

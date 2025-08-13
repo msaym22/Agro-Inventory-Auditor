@@ -15,6 +15,7 @@ const navLinks = [
   { to: '/sales', label: 'Orders', type: 'link' },
   { to: 'analytics-modal', label: 'Analytics', type: 'modal' }, // Triggers modal
   { to: '/backup-restore', label: 'Backup & Restore', type: 'link' },
+  { to: '/settings/drive', label: 'Settings', type: 'link' }, // Added Settings link
 ];
 
 const DashboardLayout = () => {

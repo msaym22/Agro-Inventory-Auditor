@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { getDriveAuthUrl, authenticateDrive, syncDrive } from '../../api/drive';
+import { getDriveAuthUrl, authenticateDrive, syncDrive, getDriveStatus, updateDatabaseFromDrive, updateDriveFromDatabase } from '../../api/drive';
 
 // Create async thunks
 export const fetchAuthUrl = createAsyncThunk(
@@ -9,7 +9,15 @@ export const fetchAuthUrl = createAsyncThunk(
       const response = await getDriveAuthUrl();
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.response.data);
+      let errorMessage = 'Failed to get auth URL';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.details) {
+        errorMessage = error.response.data.details;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -21,19 +29,102 @@ export const authDrive = createAsyncThunk(
       const response = await authenticateDrive(code);
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.response.data);
+      let errorMessage = 'Authentication failed';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.details) {
+        errorMessage = error.response.data.details;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      return rejectWithValue(errorMessage);
     }
   }
 );
 
 export const syncWithDrive = createAsyncThunk(
-  'drive/sync',
-  async (_, { rejectWithValue }) => {
+  'drive/syncWithDrive',
+  async (type, { rejectWithValue }) => {
     try {
-      const response = await syncDrive();
+      let response;
+      if (type === 'pull') {
+        response = await updateDatabaseFromDrive();
+      } else if (type === 'push') {
+        response = await updateDriveFromDatabase();
+      } else {
+        response = await syncDrive();
+      }
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.response.data);
+      let errorMessage = 'Drive sync failed';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.details) {
+        errorMessage = error.response.data.details;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+export const fetchDriveStatus = createAsyncThunk(
+  'drive/status',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await getDriveStatus();
+      return response.data;
+    } catch (error) {
+      let errorMessage = 'Failed to get drive status';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.details) {
+        errorMessage = error.response.data.details;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+export const pullFromDrive = createAsyncThunk(
+  'drive/pullFromDrive',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await updateDatabaseFromDrive();
+      return response.data;
+    } catch (error) {
+      let errorMessage = 'Failed to pull from drive';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.details) {
+        errorMessage = error.response.data.details;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+export const pushToDrive = createAsyncThunk(
+  'drive/pushToDrive',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await updateDriveFromDatabase();
+      return response.data;
+    } catch (error) {
+      let errorMessage = 'Failed to push to drive';
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.details) {
+        errorMessage = error.response.data.details;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -67,7 +158,7 @@ const driveSlice = createSlice({
         state.authUrl = action.payload.authUrl;
       })
       .addCase(fetchAuthUrl.rejected, (state, action) => {
-        state.error = action.payload?.error || 'Failed to get auth URL';
+        state.error = action.payload || 'Failed to get auth URL';
       })
       
       // Handle authDrive actions
@@ -81,7 +172,7 @@ const driveSlice = createSlice({
       })
       .addCase(authDrive.rejected, (state, action) => {
         state.isSyncing = false;
-        state.error = action.payload?.error || 'Authentication failed';
+        state.error = action.payload || 'Authentication failed';
       })
       
       // Handle syncWithDrive actions
@@ -89,13 +180,50 @@ const driveSlice = createSlice({
         state.isSyncing = true;
         state.error = null;
       })
-      .addCase(syncWithDrive.fulfilled, (state) => {
+      .addCase(syncWithDrive.fulfilled, (state, action) => {
         state.isSyncing = false;
         state.lastSync = new Date().toISOString();
+        state.error = null;
       })
       .addCase(syncWithDrive.rejected, (state, action) => {
         state.isSyncing = false;
-        state.error = action.payload?.error || 'Sync failed';
+        state.error = action.payload || 'Sync failed';
+      })
+      // Pull & Push actions
+      .addCase(pullFromDrive.pending, (state) => { 
+        state.isSyncing = true; 
+        state.error = null; 
+      })
+      .addCase(pullFromDrive.fulfilled, (state, action) => { 
+        state.isSyncing = false; 
+        state.lastSync = new Date().toISOString();
+        state.error = null;
+      })
+      .addCase(pullFromDrive.rejected, (state, action) => { 
+        state.isSyncing = false; 
+        state.error = action.payload || 'Pull failed'; 
+      })
+      .addCase(pushToDrive.pending, (state) => { 
+        state.isSyncing = true; 
+        state.error = null; 
+      })
+      .addCase(pushToDrive.fulfilled, (state, action) => { 
+        state.isSyncing = false; 
+        state.lastSync = new Date().toISOString();
+        state.error = null;
+      })
+      .addCase(pushToDrive.rejected, (state, action) => { 
+        state.isSyncing = false; 
+        state.error = action.payload || 'Push failed'; 
+      })
+      
+      // Handle fetchDriveStatus
+      .addCase(fetchDriveStatus.fulfilled, (state, action) => {
+        state.isAuthenticated = !!action.payload?.isAuthenticated;
+        state.lastSync = action.payload?.lastSync || state.lastSync;
+      })
+      .addCase(fetchDriveStatus.rejected, (state, action) => {
+        state.error = action.payload || 'Failed to get drive status';
       });
   }
 });

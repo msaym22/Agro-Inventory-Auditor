@@ -1,8 +1,15 @@
 import React from 'react';
 import { formatCurrency } from '../../utils/helpers';
+import config from '../../config/config';
 
 const SaleReceipt = ({ sale }) => {
   if (!sale) return null;
+
+  const buildUrl = (u) => {
+    const apiBase = (config.API_URL || '').replace(/\/?api\/?$/, '');
+    const pathOnly = u.startsWith('/uploads/') ? u : (u.startsWith('uploads/') ? `/${u}` : `/uploads/${u}`);
+    return `${apiBase}${pathOnly}`;
+  };
 
   return (
     <div className="bg-white p-6 rounded shadow">
@@ -10,7 +17,7 @@ const SaleReceipt = ({ sale }) => {
 
       {sale.receiptImage ? (
         <img
-          src={sale.receiptImage}
+          src={buildUrl(sale.receiptImage)}
           alt="Sale receipt"
           className="w-full max-w-md mx-auto border rounded"
         />

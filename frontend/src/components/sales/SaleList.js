@@ -1,11 +1,12 @@
 import React from 'react';
-import { DataTable } from '../common/DataTable'; // Assuming DataTable is used here
+import { DataTable } from '../common/DataTable';
+import { FaEye, FaEdit, FaTrash } from 'react-icons/fa';
 
-const SaleList = ({ sales, onSelect }) => {
+const SaleList = ({ sales, onSelect, onEdit, onDelete, onView }) => {
   const columns = [
     {
       header: 'Invoice ID',
-      accessor: 'id', // Assuming 'id' is the invoice ID
+      accessor: 'id',
       render: (row) => (
         <span className="font-semibold text-blue-600 hover:underline cursor-pointer">
           #{row.id}
@@ -19,8 +20,13 @@ const SaleList = ({ sales, onSelect }) => {
     },
     {
       header: 'Customer',
-      accessor: 'customer.name', // Access nested customer name
-      render: (row) => row.customer ? row.customer.name : 'Walk-in Customer',
+      accessor: 'customer.name',
+      render: (row) => {
+        if (row.customer && row.customer.name) {
+          return row.customer.name;
+        }
+        return 'Walk-in Customer';
+      },
     },
     {
       header: 'Total Amount',
@@ -46,15 +52,41 @@ const SaleList = ({ sales, onSelect }) => {
       header: 'Actions',
       accessor: 'actions',
       render: (row) => (
-        <button
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent onSelect from firing when clicking action button
-            onSelect(row); // Assuming onSelect handles viewing details
-          }}
-          className="text-blue-600 hover:text-blue-900 font-semibold"
-        >
-          View Details
-        </button>
+        <div className="flex space-x-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onView) onView(row);
+            }}
+            className="text-blue-600 hover:text-blue-900 transition-colors"
+            title="View Details"
+          >
+            <FaEye />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onEdit) onEdit(row);
+            }}
+            className="text-green-600 hover:text-green-900 transition-colors"
+            title="Edit Sale"
+          >
+            <FaEdit />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onDelete) onDelete(row.id);
+            }}
+            className="text-red-600 hover:text-red-900 transition-colors"
+            title="Delete Sale"
+          >
+            <FaTrash />
+          </button>
+        </div>
       ),
     },
   ];
@@ -62,8 +94,8 @@ const SaleList = ({ sales, onSelect }) => {
   return (
     <DataTable
       columns={columns}
-      data={sales} // Ensure 'sales' is an array here
-      onRowClick={onSelect} // Pass onSelect to DataTable for row clicks
+      data={sales}
+      onRowClick={onSelect}
     />
   );
 };

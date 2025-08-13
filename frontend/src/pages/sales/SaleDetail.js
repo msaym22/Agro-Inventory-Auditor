@@ -7,6 +7,7 @@ import Loading from '../../components/common/Loading';
 import InvoiceGenerator from '../../components/sales/InvoiceGenerator';
 import { Button } from '../../components/common/Button';
 import ImagePreview from '../../components/common/ImagePreview';
+import config from '../../config/config';
 
 export const SaleDetail = () => {
   const { id } = useParams();
@@ -137,12 +138,18 @@ export const SaleDetail = () => {
           </p>
         </div>
 
-        {sale.receiptImage && (
-          <div className="mt-6">
-            <h2 className="text-lg font-semibold mb-2">Receipt Image</h2>
-            <ImagePreview url={`/uploads/${sale.receiptImage}`} alt="Sale Receipt" />
-          </div>
-        )}
+          {sale.receiptImage && (
+            <div className="mt-6">
+              <h2 className="text-lg font-semibold mb-2">Receipt Image</h2>
+              {(() => {
+                const u = sale.receiptImage || '';
+                const apiBase = (config.API_URL || '').replace(/\/?api\/?$/, '');
+                const pathOnly = u.startsWith('/uploads/') ? u : (u.startsWith('uploads/') ? `/${u}` : `/uploads/${u}`);
+                const absoluteUrl = `${apiBase}${pathOnly}`;
+                return <ImagePreview url={absoluteUrl} alt="Sale Receipt" />;
+              })()}
+            </div>
+          )}
 
         <div className="mt-8 pt-6 border-t border-gray-200">
           <div className="flex justify-between items-center mb-4">

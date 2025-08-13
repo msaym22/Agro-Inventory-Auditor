@@ -6,6 +6,8 @@ import { Button } from '../../components/common/Button';
 import Loading from '../../components/common/Loading';
 import { fetchProducts, removeProduct } from '../../features/products/productSlice';
 import { FaBoxOpen } from 'react-icons/fa'; // Import an icon for empty state
+import { toast } from 'react-toastify';
+import productsAPI from '../../api/products';
 
 export const ProductListPage = () => {
   const dispatch = useDispatch();
@@ -14,6 +16,8 @@ export const ProductListPage = () => {
   const products = useSelector((state) => state.products.products);
   const loading = useSelector((state) => state.products.loading);
   const error = useSelector((state) => state.products.error);
+
+  const [importFile, setImportFile] = useState(null);
 
   useEffect(() => {
     dispatch(fetchProducts());
@@ -34,7 +38,6 @@ export const ProductListPage = () => {
         // State is updated by the removeProduct fulfilled action
       } catch (error) {
         console.error('Deletion failed:', error);
-        // Optionally show a toast notification for error
       }
     }
   };
@@ -43,16 +46,41 @@ export const ProductListPage = () => {
     navigate('/products/new');
   };
 
+  const handleImport = async () => {
+    if (!importFile) {
+      toast.warn('Please choose an Excel file (.xlsx or .xls)');
+      return;
+    }
+    try {
+      const res = await productsAPI.importProducts(importFile);
+      toast.success(`Import done. Created: ${res.results?.created || 0}, Updated: ${res.results?.updated || 0}, Skipped: ${res.results?.skipped || 0}`);
+      setImportFile(null);
+      dispatch(fetchProducts());
+    } catch (e) {
+      console.error('Import failed', e);
+      toast.error('Import failed');
+    }
+  };
+
   if (loading) return <Loading />;
   if (error) return <div className="text-red-500 text-center py-4">Error: {error}</div>;
 
   return (
     <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
         <h1 className="text-3xl font-bold text-gray-800">Product Catalog</h1>
-        <Button onClick={handleCreate} variant="primary" size="large">
-          Add New Product
-        </Button>
+        <div className="flex items-center gap-3">
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+            className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none"
+          />
+          <Button onClick={handleImport} variant="secondary" size="medium">Import Excel</Button>
+          <Button onClick={handleCreate} variant="primary" size="large">
+            Add New Product
+          </Button>
+        </div>
       </div>
 
       {products && products.length === 0 ? (

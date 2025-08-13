@@ -18,6 +18,7 @@ import {
   fetchProductsByQuantitySold,
   fetchCustomerHistory,
   fetchProductHistory,
+  fetchCreditAnalytics,
   clearDetailedHistory,
 } from '../../features/sales/saleSlice';
 
@@ -37,6 +38,7 @@ const AnalyticsPage = () => {
     error: analyticsError,   // Specific error state for analytics data
     customerHistory, // Detailed customer history fetched on click
     productHistory,  // Detailed product history fetched on click
+    creditAnalytics, // NEW: Credit analytics data
     totalSales = 0,
     totalRevenue = '0.00',
     totalProfit = '0.00',
@@ -119,6 +121,13 @@ const AnalyticsPage = () => {
       navigate('/analytics-login');
     }
   }, [dispatch, navigate, analyticsAuthenticated, selectedPeriod, customStartDate, customEndDate]);
+
+  // Fetch credit analytics when credit tab is active
+  useEffect(() => {
+    if (analyticsAuthenticated && activeTab === 'credit') {
+      dispatch(fetchCreditAnalytics());
+    }
+  }, [dispatch, analyticsAuthenticated, activeTab]);
 
 
   // Handle period change, reset custom dates
@@ -204,7 +213,7 @@ const AnalyticsPage = () => {
   }
 
   if (analyticsError && !showDetailModal) { // Only show full page error if modal is not open
-    return <div className="text-red-500 text-center py-4">Error: {analyticsError.details || analyticsError.message || 'Unknown error'}</div>;
+    return <div className="text-red-500 text-center py-4">Error: {analyticsError}</div>;
   }
 
 
@@ -241,6 +250,15 @@ const AnalyticsPage = () => {
             onClick={() => setActiveTab('salesByCustomer')}
           >
             Sales by Customer
+          </button>
+          <button
+            className={`${activeTab === 'credit'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            onClick={() => setActiveTab('credit')}
+          >
+            Credit Analytics
           </button>
         </nav>
       </div>
@@ -411,6 +429,87 @@ const AnalyticsPage = () => {
         </>
       )}
 
+      {activeTab === 'credit' && (
+        <>
+          {/* Credit Analytics Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-700">Total Credit</h3>
+              <p className="text-3xl font-bold text-red-600 mt-2">
+                {creditAnalytics ? formatCurrency(creditAnalytics.totalCredit) : 'Loading...'}
+              </p>
+            </div>
+            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-700">Customers with Credit</h3>
+              <p className="text-3xl font-bold text-orange-600 mt-2">
+                {creditAnalytics ? creditAnalytics.totalCustomersWithCredit : 'Loading...'}
+              </p>
+            </div>
+            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-700">Average Credit</h3>
+              <p className="text-3xl font-bold text-yellow-600 mt-2">
+                {creditAnalytics ? formatCurrency(creditAnalytics.averageCreditPerCustomer) : 'Loading...'}
+              </p>
+            </div>
+            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-700">Over Limit</h3>
+              <p className="text-3xl font-bold text-red-600 mt-2">
+                {creditAnalytics ? creditAnalytics.customersExceedingLimit : 'Loading...'}
+              </p>
+            </div>
+          </div>
+
+          {/* Credit Customers Table */}
+          <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 mb-8">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Credit Customers (Sorted by Outstanding Balance)</h2>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Outstanding Balance</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credit Limit</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {creditAnalytics && creditAnalytics.creditCustomers && creditAnalytics.creditCustomers.length > 0 ? (
+                    creditAnalytics.creditCustomers.map((customer, index) => (
+                      <tr key={customer.id || index} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{customer.name}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{customer.contact || 'N/A'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-red-600">
+                          {formatCurrency(customer.outstandingBalance)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {customer.creditLimit ? formatCurrency(customer.creditLimit) : 'No Limit'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                              customer.isOverLimit ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                            }`}
+                          >
+                            {customer.isOverLimit ? 'Over Limit' : 'Within Limit'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="5" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                        {creditAnalytics ? 'No customers with credit found.' : 'Loading credit data...'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Optional: Add a refresh button */}
       <div className="text-center mt-8">
         <Button onClick={() => window.location.reload()}>Refresh Analytics</Button>
@@ -425,7 +524,7 @@ const AnalyticsPage = () => {
             <Loading message={`Fetching ${selectedDetailType} history...`} />
           )}
           {analyticsError && (
-            <div className="text-red-500 text-center py-4">Error fetching history: {analyticsError.details || analyticsError.message || 'Unknown error'}</div>
+            <div className="text-red-500 text-center py-4">Error fetching history: {analyticsError}</div>
           )}
 
           {/* Customer History Display */}

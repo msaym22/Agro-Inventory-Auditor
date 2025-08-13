@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
-import { FaSync } from 'react-icons/fa';
+import { FaCloudUploadAlt } from 'react-icons/fa';
 
 // Components
 import QuickStats from '../../components/dashboard/QuickStats';
@@ -13,7 +13,7 @@ import Loading from '../../components/common/Loading';
 import { fetchProducts } from '../../features/products/productSlice';
 import { fetchCustomers } from '../../features/customers/customerSlice';
 import { fetchSales } from '../../features/sales/saleSlice';
-import { syncWithDrive } from '../../features/drive/driveSlice';
+import { pushToDrive } from '../../features/drive/driveSlice';
 
 const Dashboard = () => {
   const dispatch = useDispatch();
@@ -71,7 +71,7 @@ const Dashboard = () => {
   // Handle sync button click
   const handleSyncClick = () => {
     if (!isSyncing) {
-      dispatch(syncWithDrive());
+      dispatch(pushToDrive());
     }
   };
 
@@ -112,8 +112,8 @@ const Dashboard = () => {
               : 'bg-green-600 text-white hover:bg-green-700'
           } transition-colors min-w-[200px] justify-center`}
         >
-          <FaSync className={`mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-          {isSyncing ? 'Syncing...' : 'Sync with Drive'}
+          <FaCloudUploadAlt className={`mr-2 ${isSyncing ? 'animate-pulse' : ''}`} />
+          {isSyncing ? 'Updating...' : 'Update Drive'}
           {lastSync && !isSyncing && (
             <span className="ml-2 text-xs text-green-200">
               Last: {new Date(lastSync).toLocaleTimeString()}

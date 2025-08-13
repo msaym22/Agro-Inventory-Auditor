@@ -5,7 +5,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import CustomerForm from '../../components/customers/CustomerForm'; // Re-use CustomerForm
 import { toast } from 'react-toastify';
 import Loading from '../../components/common/Loading';
-import { fetchCustomerById, updateExistingCustomer } from '../../features/customers/customerSlice';
+import { fetchCustomerById, updateCustomer } from '../../features/customers/customerSlice';
 
 export const EditCustomer = () => {
   const { id } = useParams(); // Get customer ID from URL
@@ -53,7 +53,7 @@ export const EditCustomer = () => {
     };
 
     try {
-      await dispatch(updateExistingCustomer({ id, customerData: dataToSubmit })).unwrap();
+      await dispatch(updateCustomer({ id, customerData: dataToSubmit })).unwrap();
       toast.success('Customer updated successfully!');
       navigate('/customers'); // Redirect to customer list page after update
     } catch (error) {

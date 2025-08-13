@@ -1,39 +1,31 @@
-const { Sale, SaleItem, Product, Customer } = require('../models');
+const db = require('../models');
 const { Op } = require('sequelize');
-const moment = require('moment'); // Make sure moment is installed (npm install moment)
+const moment = require('moment');
 
-// Create a new sale
 exports.createSale = async (req, res) => {
-  console.log("Sale creation request received. req.body:", req.body); // Log incoming request body
+  console.log("Sale creation request received. req.body:", req.body);
   let transaction;
   try {
-    // Assuming saleData is sent as a JSON string in a 'saleData' field of FormData
-    // And receiptImage (if any) is in req.file
     const { saleData } = req.body;
     const parsedSaleData = JSON.parse(saleData);
-    console.log("Parsed Sale Data:", parsedSaleData); // Log parsed data
+    console.log("Parsed Sale Data:", parsedSaleData);
 
-    const receiptImage = req.file ? req.file.path : null; // Get image path if uploaded
+    const receiptImage = req.file ? req.file.filename : null;
 
-    transaction = await Sale.sequelize.transaction();
+    transaction = await db.Sale.sequelize.transaction();
 
-    // Validate customer and products existence before creating sale
-    const customer = await Customer.findByPk(parsedSaleData.customerId, { transaction });
-    // Allow sale without a customer (e.g., walk-in) if customerId is null/undefined
+    const customer = await db.Customer.findByPk(parsedSaleData.customerId, { transaction });
     if (parsedSaleData.customerId && !customer) {
       throw new Error('Customer not found');
     }
 
     const productIds = parsedSaleData.items.map(item => item.productId);
-    const products = await Product.findAll({ where: { id: productIds }, transaction });
+    const products = await db.Product.findAll({ where: { id: productIds }, transaction });
 
     if (products.length !== parsedSaleData.items.length) {
-      // This check might be too strict if some items are invalid but others are valid.
-      // Consider filtering out invalid items or returning a more specific error.
       throw new Error('One or more product IDs in sale items are invalid or not found');
     }
 
-    // Calculate total amount and prepare sale items
     let calculatedSubTotal = 0;
     const saleItemsToCreate = [];
 
@@ -44,23 +36,22 @@ exports.createSale = async (req, res) => {
         throw new Error(`Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
       }
 
-      const itemPrice = product.sellingPrice; // Use product's current selling price
+      const itemPrice = product.sellingPrice;
       calculatedSubTotal += itemPrice * item.quantity;
       saleItemsToCreate.push({
         productId: item.productId,
         quantity: item.quantity,
-        priceAtSale: itemPrice, // Record price at the time of sale
+        priceAtSale: itemPrice,
       });
     }
 
     const finalTotalAmount = calculatedSubTotal - (parsedSaleData.discount || 0);
 
-    // Create the sale record
-    const sale = await Sale.create({
+    const sale = await db.Sale.create({
       customerId: parsedSaleData.customerId,
-      saleDate: parsedSaleData.saleDate || new Date(), // Use provided date or current date
+      saleDate: parsedSaleData.saleDate || new Date(),
       totalAmount: finalTotalAmount,
-      subTotal: calculatedSubTotal, // Store subTotal
+      subTotal: calculatedSubTotal,
       discount: parsedSaleData.discount || 0,
       paymentMethod: parsedSaleData.paymentMethod,
       paymentStatus: parsedSaleData.paymentStatus,
@@ -68,16 +59,14 @@ exports.createSale = async (req, res) => {
       receiptImage: receiptImage,
     }, { transaction });
 
-    // Create sale items and update product stock within the same transaction
     for (const itemData of saleItemsToCreate) {
-      await SaleItem.create({
+      await db.SaleItem.create({
         saleId: sale.id,
         productId: itemData.productId,
         quantity: itemData.quantity,
         priceAtSale: itemData.priceAtSale
       }, { transaction });
 
-      // Update product stock
       const productToUpdate = products.find(p => p.id === itemData.productId);
       if (productToUpdate) {
         productToUpdate.stock -= itemData.quantity;
@@ -85,42 +74,41 @@ exports.createSale = async (req, res) => {
       }
     }
 
-    // Update customer's outstanding balance if payment method is credit and not fully paid
-    if (parsedSaleData.paymentMethod === 'credit' && parsedSaleData.paymentStatus !== 'paid' && customer) {
-      customer.outstandingBalance = (customer.outstandingBalance || 0) + finalTotalAmount;
-      await customer.save({ transaction });
+    // Handle credit logic based on payment method
+    if (customer && (parsedSaleData.paymentMethod === 'credit' || parsedSaleData.paymentMethod === 'partial')) {
+      let creditAmount = 0;
+      
+      if (parsedSaleData.paymentMethod === 'credit') {
+        // Full amount goes to credit
+        creditAmount = finalTotalAmount;
+      } else if (parsedSaleData.paymentMethod === 'partial') {
+        // Calculate remaining amount after down payment
+        const downPayment = parseFloat(parsedSaleData.downPayment) || 0;
+        creditAmount = finalTotalAmount - downPayment;
+      }
+      
+      if (creditAmount > 0) {
+        customer.outstandingBalance = (customer.outstandingBalance || 0) + creditAmount;
+        await customer.save({ transaction });
+        console.log(`Updated customer ${customer.name} credit balance to: ${customer.outstandingBalance}`);
+      }
     }
 
     await transaction.commit();
 
-    // Fetch the created sale with all necessary associations for the frontend
-    const createdSale = await Sale.findByPk(sale.id, {
+    const createdSale = await db.Sale.findByPk(sale.id, {
       include: [
-        {
-          model: Customer,
-          as: 'customer',
-          attributes: ['id', 'name', 'contact', 'address', 'outstandingBalance']
-        },
-        {
-          model: SaleItem,
-          as: 'items',
-          include: [
-            {
-              model: Product,
-              as: 'product',
-              attributes: ['id', 'name', 'sellingPrice', 'nameUrdu']
-            }
-          ]
-        }
+        { model: db.Customer, as: 'customer', attributes: ['id', 'name', 'contact', 'address', 'outstandingBalance'] },
+        { model: db.SaleItem, as: 'items', include: [{ model: db.Product, as: 'product', attributes: ['id', 'name', 'sellingPrice', 'nameUrdu'] }] }
       ]
     });
 
-    console.log("Sale created and fetched successfully:", createdSale); // Log final response
+    console.log("Sale created and fetched successfully:", createdSale);
     res.status(201).json(createdSale);
 
   } catch (error) {
-    if (transaction) await transaction.rollback(); // Rollback transaction on error
-    console.error('Error creating sale:', error); // Log full error object
+    if (transaction) await transaction.rollback();
+    console.error('Error creating sale:', error);
     if (error.name === 'SequelizeValidationError') {
       return res.status(400).json({ error: 'Validation failed', details: error.errors.map(e => e.message) });
     }
@@ -134,7 +122,6 @@ exports.createSale = async (req, res) => {
   }
 };
 
-// Get all sales with pagination and search
 exports.getSales = async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 20;
@@ -142,107 +129,120 @@ exports.getSales = async (req, res) => {
   const offset = (page - 1) * limit;
 
   try {
-    const where = {};
-    const includeOptions = [
+    let salesWhere = {};
+    let includeOptions = [
+      { model: db.Customer, as: 'customer', attributes: ['id', 'name', 'contact', 'address'], required: false },
       {
-        model: Customer,
-        as: 'customer',
-        attributes: ['id', 'name', 'contact', 'address'],
-        required: false, // Start as LEFT OUTER JOIN
-      },
-      {
-        model: SaleItem,
-        as: 'items',
-        attributes: ['quantity', 'priceAtSale'],
-        required: false, // Start as LEFT OUTER JOIN
-        include: [
-          {
-            model: Product,
-            as: 'product',
-            attributes: ['id', 'name', 'nameUrdu', 'sellingPrice'],
-            required: false, // Start as LEFT OUTER JOIN
-          }
-        ],
+        model: db.SaleItem, as: 'items', attributes: ['quantity', 'priceAtSale'], required: false,
+        include: [{ model: db.Product, as: 'product', attributes: ['id', 'name', 'nameUrdu', 'sellingPrice'], required: false }]
       }
     ];
 
     if (search) {
       const searchConditions = [];
-      if (!isNaN(search) && parseFloat(search).toString() === search) { // Check if it's a number
-        searchConditions.push(
-          { id: parseInt(search) }, // Search by Sale ID
-          { totalAmount: parseFloat(search) } // Search by Total Amount
-        );
-      } else {
-        // Search by customer name (case-insensitive for SQLite using COLLATE NOCASE with LIKE)
-        includeOptions[0].where = { name: { [Op.like]: `%${search}%` } };
-        includeOptions[0].required = true; // INNER JOIN when searching by customer name
+      const numericSearch = parseFloat(search);
 
-        includeOptions[1].include[0].where = { name: { [Op.like]: `%${search}%` } };
-        includeOptions[1].include[0].required = true; // INNER JOIN when searching by product name
-        includeOptions[1].required = true; // Also make SaleItem join required if product search is active
+      if (!isNaN(numericSearch) && numericSearch.toString() === search) {
+        searchConditions.push(
+          { id: parseInt(search) },
+          { totalAmount: numericSearch }
+        );
       }
-      if (searchConditions.length > 0) {
-          where[Op.or] = searchConditions;
+
+      // Find sales by customer name
+      const customerSales = await db.Sale.findAll({
+        attributes: ['id'],
+        include: [{
+          model: db.Customer,
+          as: 'customer',
+          where: { name: { [Op.like]: `%${search}%` } },
+          attributes: [],
+          required: true // Ensures an INNER JOIN for filtering
+        }],
+        raw: true // Get plain data without Sequelize instances
+      });
+      const customerSaleIds = customerSales.map(sale => sale.id);
+
+      // Find sales by product name (through SaleItem)
+      const productSales = await db.Sale.findAll({
+        attributes: ['id'],
+        include: [{
+          model: db.SaleItem,
+          as: 'items',
+          attributes: [],
+          required: true, // INNER JOIN for SaleItem
+          include: [{
+            model: db.Product,
+            as: 'product',
+            attributes: [],
+            where: { name: { [Op.like]: `%${search}%` } },
+            required: true // INNER JOIN for Product
+          }]
+        }],
+        raw: true
+      });
+      const productSaleIds = productSales.map(sale => sale.id);
+
+      // Combine all sale IDs from different search criteria
+      const combinedSaleIds = [...new Set([...customerSaleIds, ...productSaleIds, ...searchConditions.map(c => c.id)].filter(Boolean))];
+
+      if (combinedSaleIds.length > 0) {
+        salesWhere.id = { [Op.in]: combinedSaleIds };
+      } else {
+        // If no IDs found by search, return empty to avoid fetching all sales
+        salesWhere.id = { [Op.in]: [] };
       }
+
+      // When searching, we only need the basic associations for display,
+      // as the filtering is done by ID at the top level.
+      // So, revert required to false for main query for flexibility.
+      includeOptions[0].required = false;
+      includeOptions[1].required = false;
+      includeOptions[1].include[0].required = false;
     }
 
-    if (req.query.customerId) { // Filter by specific customer ID if provided
-      where.customerId = req.query.customerId;
+    if (req.query.customerId) {
+      salesWhere.customerId = req.query.customerId;
     }
 
     if (req.query.startDate && req.query.endDate) {
-      where.saleDate = {
-        [Op.between]: [
-          moment(req.query.startDate).startOf('day').toDate(),
-          moment(req.query.endDate).endOf('day').toDate()
-        ]
+      salesWhere.saleDate = {
+        [Op.between]: [moment(req.query.startDate).startOf('day').toDate(), moment(req.query.endDate).endOf('day').toDate()]
       };
     } else if (req.query.startDate) {
-      where.saleDate = { [Op.gte]: moment(req.query.startDate).startOf('day').toDate() };
+      salesWhere.saleDate = { [Op.gte]: moment(req.query.startDate).startOf('day').toDate() };
     } else if (req.query.endDate) {
-      where.saleDate = { [Op.lte]: moment(req.query.endDate).endOf('day').toDate() };
+      salesWhere.saleDate = { [Op.lte]: moment(req.query.endDate).endOf('day').toDate() };
     }
 
-    const { count, rows } = await Sale.findAndCountAll({
-      where,
+    const { count, rows } = await db.Sale.findAndCountAll({
+      where: salesWhere,
       order: [['saleDate', 'DESC']],
       limit: parseInt(limit),
       offset: offset,
       include: includeOptions,
-      distinct: true, // Use distinct to prevent duplicate sales when joining multiple items
-      col: 'id', // Specify the column to count distinct values on
+      distinct: true,
+      col: 'id',
     });
 
     const totalPages = Math.ceil(count / limit);
 
     res.json({
-      sales: rows, // Ensure this is 'sales' for the frontend's fetchSales.fulfilled
-      pagination: {
-        totalItems: count,
-        totalPages,
-        currentPage: parseInt(page),
-        itemsPerPage: parseInt(limit)
-      }
+      sales: rows,
+      pagination: { totalItems: count, totalPages, currentPage: parseInt(page), itemsPerPage: parseInt(limit) }
     });
   } catch (err) {
-    console.error('Failed to fetch sales:', err); // Log full error object
+    console.error('Failed to fetch sales:', err);
     res.status(500).json({ error: 'Failed to fetch sales', details: err.message });
   }
 };
 
-// Get a single sale by ID
 exports.getSaleById = async (req, res) => {
   try {
-    const sale = await Sale.findByPk(req.params.id, {
+    const sale = await db.Sale.findByPk(req.params.id, {
       include: [
-        { model: Customer, as: 'customer', attributes: ['id', 'name', 'contact', 'address', 'outstandingBalance'] },
-        {
-          model: SaleItem,
-          as: 'items',
-          attributes: ['quantity', 'priceAtSale'],
-          include: [{ model: Product, as: 'product', attributes: ['id', 'name', 'sellingPrice', 'nameUrdu'] }] // Added 'nameUrdu'
-        }
+        { model: db.Customer, as: 'customer', attributes: ['id', 'name', 'contact', 'address', 'outstandingBalance'] },
+        { model: db.SaleItem, as: 'items', attributes: ['quantity', 'priceAtSale'], include: [{ model: db.Product, as: 'product', attributes: ['id', 'name', 'sellingPrice', 'nameUrdu'] }] }
       ]
     });
 
@@ -257,21 +257,16 @@ exports.getSaleById = async (req, res) => {
   }
 };
 
-// Update a sale by ID
 exports.updateSale = async (req, res) => {
   console.log("Sale update request received. req.body:", req.body);
   const { id } = req.params;
-  const { items, ...saleData } = req.body; // Destructure items if present
+  const { items, ...saleData } = req.body;
 
   let transaction;
   try {
-    transaction = await Sale.sequelize.transaction();
+    transaction = await db.Sale.sequelize.transaction();
 
-    const [updatedRows] = await Sale.update(saleData, {
-      where: { id },
-      transaction,
-      returning: true // Return the updated row
-    });
+    const [updatedRows] = await db.Sale.update(saleData, { where: { id }, transaction, returning: true });
 
     if (updatedRows === 0) {
       await transaction.rollback();
@@ -279,18 +274,16 @@ exports.updateSale = async (req, res) => {
     }
 
     if (items && items.length > 0) {
-      await SaleItem.destroy({ where: { saleId: id }, transaction }); // Delete old items
+      await db.SaleItem.destroy({ where: { saleId: id }, transaction });
       for (const item of items) {
-        await SaleItem.create({
+        await db.SaleItem.create({
           saleId: id,
           productId: item.productId,
           quantity: item.quantity,
-          priceAtSale: item.priceAtSale // Use priceAtSale from frontend
+          priceAtSale: item.priceAtSale
         }, { transaction });
 
-        // This is a simplified stock update. For a real system, you'd need to calculate
-        // the difference between old and new quantities for the product.
-        const product = await Product.findByPk(item.productId, { transaction });
+        const product = await db.Product.findByPk(item.productId, { transaction });
         if (product) {
           product.stock -= item.quantity;
           await product.save({ transaction });
@@ -300,10 +293,10 @@ exports.updateSale = async (req, res) => {
 
     await transaction.commit();
 
-    const updatedSale = await Sale.findByPk(id, {
+    const updatedSale = await db.Sale.findByPk(id, {
       include: [
-        { model: Customer, as: 'customer', attributes: ['id', 'name'] },
-        { model: SaleItem, as: 'items', include: [{ model: Product, as: 'product', attributes: ['id', 'name', 'nameUrdu'] }] }
+        { model: db.Customer, as: 'customer', attributes: ['id', 'name'] },
+        { model: db.SaleItem, as: 'items', include: [{ model: db.Product, as: 'product', attributes: ['id', 'name', 'nameUrdu'] }] }
       ]
     });
     console.log("Sale updated successfully:", updatedSale);
@@ -319,27 +312,22 @@ exports.updateSale = async (req, res) => {
   }
 };
 
-// Delete a sale
 exports.deleteSale = async (req, res) => {
   console.log("Sale deletion request received. id:", req.params.id);
   let transaction;
   try {
-    transaction = await Sale.sequelize.transaction();
+    transaction = await db.Sale.sequelize.transaction();
 
-    // Revert stock for products in this sale before deleting
-    const saleItems = await SaleItem.findAll({ where: { saleId: req.params.id }, transaction });
+    const saleItems = await db.SaleItem.findAll({ where: { saleId: req.params.id }, transaction });
     for (const item of saleItems) {
-      const product = await Product.findByPk(item.productId, { transaction });
+      const product = await db.Product.findByPk(item.productId, { transaction });
       if (product) {
-        product.stock += item.quantity; // Add back stock
+        product.stock += item.quantity;
         await product.save({ transaction });
       }
     }
 
-    const deleted = await Sale.destroy({
-      where: { id: req.params.id },
-      transaction
-    });
+    const deleted = await db.Sale.destroy({ where: { id: req.params.id }, transaction });
 
     if (deleted) {
       await transaction.commit();
@@ -356,30 +344,16 @@ exports.deleteSale = async (req, res) => {
   }
 };
 
-// Fetches data for a single invoice and sends it to the frontend
 exports.generateInvoice = async (req, res) => {
   try {
-    const sale = await Sale.findByPk(req.params.id, {
+    const sale = await db.Sale.findByPk(req.params.id, {
       include: [
-        {
-          model: Customer,
-          as: 'customer',
-          attributes: ['id', 'name', 'contact', 'address', 'outstandingBalance']
-        },
-        {
-          model: SaleItem,
-          as: 'items',
-          include: [{
-            model: Product,
-            as: 'product',
-            attributes: ['id', 'name', 'sellingPrice', 'nameUrdu']
-          }]
-        }
+        { model: db.Customer, as: 'customer', attributes: ['id', 'name', 'contact', 'address', 'outstandingBalance'] },
+        { model: db.SaleItem, as: 'items', include: [{ model: db.Product, as: 'product', attributes: ['id', 'name', 'sellingPrice', 'nameUrdu'] }] }
       ]
     });
 
     if (sale) {
-      // The frontend expects a specific data structure. We format it here.
       const invoiceData = {
         invoiceId: sale.id,
         customerName: sale.customer ? sale.customer.name : 'Walk-in Customer',
@@ -411,7 +385,6 @@ exports.generateInvoice = async (req, res) => {
   }
 };
 
-// Export all functions
 module.exports = {
   createSale: exports.createSale,
   getSales: exports.getSales,
@@ -420,5 +393,3 @@ module.exports = {
   deleteSale: exports.deleteSale,
   generateInvoice: exports.generateInvoice,
 };
-
-console.log('--- saleController.js has been loaded. Exports:', module.exports);

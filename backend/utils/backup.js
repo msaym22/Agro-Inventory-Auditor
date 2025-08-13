@@ -1,7 +1,7 @@
 // backend/utils/backup.js
 const fs = require('fs');
 const path = require('path');
-const { Product, Customer, Sale } = require('../models');
+const db = require('../models');
 const { encrypt, decrypt } = require('./encryption');
 const moment = require('moment');
 
@@ -20,9 +20,25 @@ const backupDatabase = async () => {
       console.log('Backup directory created.'); // Add this log
     }
 
-    const products = await Product.findAll();
-    const customers = await Customer.findAll();
-    const sales = await Sale.findAll();
+    // Use dynamic db models so this works even after Drive pull/reload
+    let products, customers, sales;
+    try {
+      products = await db.Product.findAll();
+      customers = await db.Customer.findAll();
+      sales = await db.Sale.findAll();
+    } catch (e) {
+      const msg = (e && e.message) || '';
+      if (msg.includes('ConnectionManager.getConnection') && msg.includes('closed')) {
+        // Attempt to reload Sequelize once, then retry the queries
+        const reloaded = await (db.reloadSequelize?.() || Promise.resolve(false));
+        if (!reloaded) throw e;
+        products = await db.Product.findAll();
+        customers = await db.Customer.findAll();
+        sales = await db.Sale.findAll();
+      } else {
+        throw e;
+      }
+    }
 
     const backupData = {
       timestamp: new Date(),

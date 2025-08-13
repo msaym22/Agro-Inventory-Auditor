@@ -11,6 +11,7 @@ const {
   getProductsByQuantitySold, // Ensuring this and other new functions are imported
   getCustomerHistory,
   getProductHistory,
+  getCreditAnalytics,
 } = require('../controllers/analyticsController');
 
 // Apply the 'protect' middleware to each route
@@ -23,5 +24,6 @@ router.get('/monthly-sales-report', protect, getMonthlySalesReport);
 router.get('/products/quantity-sold', protect, getProductsByQuantitySold);
 router.get('/customer-history/:customerId', protect, getCustomerHistory);
 router.get('/product-history/:productId', protect, getProductHistory);
+router.get('/credit', protect, getCreditAnalytics);
 
 module.exports = router;

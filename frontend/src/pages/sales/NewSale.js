@@ -20,7 +20,7 @@ import { createCustomer as createCustomerApi } from '../../api/customers';
 
 // Redux Thunks and Actions
 import { fetchProducts } from '../../features/products/productSlice';
-import { fetchCustomers, addNewCustomer as addNewCustomerAction } from '../../features/customers/customerSlice'; // Corrected import for addNewCustomer as a plain action
+import { fetchCustomers, addCustomer } from '../../features/customers/customerSlice'; // Corrected import for addNewCustomer as a plain action
 // CORRECTED IMPORT: addNewSale as a thunk, addSale as a plain action
 import { addNewSale as addNewSaleThunk, addSale } from '../../features/sales/saleSlice';
 
@@ -52,6 +52,7 @@ const NewSale = () => {
   const [discount, setDiscount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentStatus, setPaymentStatus] = useState('paid');
+  const [downPayment, setDownPayment] = useState(0);
   const [notes, setNotes] = useState('');
   const [receiptImageFile, setReceiptImageFile] = useState(null);
   const [receiptImagePreviewUrl, setReceiptImagePreviewUrl] = useState(null);
@@ -102,7 +103,7 @@ const NewSale = () => {
       setSelectedCustomer(createdCustomer);
       setIsNewCustomerMode(false); // Customer is now saved, so not "new unsaved" anymore
       setCustomerSearchTerm(createdCustomer.name);
-      dispatch(addNewCustomerAction(createdCustomer)); // Update Redux state with new customer
+      dispatch(addCustomer(createdCustomer)); // Update Redux state with new customer
       toast.success('New customer saved successfully!');
       setShowNewCustomerModal(false); // Close the modal
     } catch (error) {
@@ -188,6 +189,64 @@ const NewSale = () => {
     }
   };
 
+  const handlePaymentMethodChange = (method) => {
+    setPaymentMethod(method);
+    
+    // Reset payment status and down payment based on method
+    if (method === 'cash') {
+      setPaymentStatus('paid');
+      setDownPayment(0);
+    } else if (method === 'credit') {
+      setPaymentStatus('pending');
+      setDownPayment(0);
+    } else if (method === 'partial') {
+      setPaymentStatus('partial');
+      setDownPayment(0);
+    }
+  };
+
+  const renderPaymentStatusSection = () => {
+    if (paymentMethod === 'cash') {
+      return null; // No payment status needed for cash
+    }
+
+    if (paymentMethod === 'credit') {
+      return (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+          <p className="text-yellow-800 text-sm">
+            <strong>Credit Sale:</strong> The full amount of PKR {calculateTotal().grandTotal.toFixed(2)} will be added to the customer's credit balance.
+          </p>
+        </div>
+      );
+    }
+
+    if (paymentMethod === 'partial') {
+      const totalAmount = calculateTotal().grandTotal;
+      const remainingAmount = totalAmount - (parseFloat(downPayment) || 0);
+      
+      return (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-blue-800 text-sm">
+                <strong>Down Payment:</strong> PKR {(parseFloat(downPayment) || 0).toFixed(2)}
+              </p>
+              <p className="text-blue-800 text-sm">
+                <strong>Remaining Credit:</strong> PKR {remainingAmount.toFixed(2)}
+              </p>
+            </div>
+            <div className="text-blue-800 text-sm">
+              <p><strong>Total Amount:</strong> PKR {totalAmount.toFixed(2)}</p>
+              <p><strong>Status:</strong> Partial Payment</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   const handleSubmitSale = async (e) => {
     e.preventDefault();
 
@@ -223,6 +282,7 @@ const NewSale = () => {
       discount: parseFloat(discount) || 0,
       paymentMethod: paymentMethod,
       paymentStatus: paymentStatus,
+      downPayment: parseFloat(downPayment) || 0,
       notes: notes,
       totalAmount: grandTotal,
       subTotal: subTotal,
@@ -273,6 +333,7 @@ const NewSale = () => {
       setDiscount('');
       setPaymentMethod('cash');
       setPaymentStatus('paid');
+      setDownPayment(0);
       setNotes('');
       setReceiptImageFile(null);
       setReceiptImagePreviewUrl(null);
@@ -473,28 +534,39 @@ const NewSale = () => {
               <select
                 id="paymentMethod"
                 value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
+                onChange={(e) => handlePaymentMethodChange(e.target.value)}
                 className="w-full p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300 bg-white"
               >
                 <option value="cash">Cash</option>
-                <option value="card">Card</option>
                 <option value="credit">Credit</option>
+                <option value="partial">Partial Payment</option>
               </select>
             </div>
 
-            <div>
-              <label htmlFor="paymentStatus" className="block text-sm font-medium text-gray-700 mb-2">Payment Status</label>
-              <select
-                id="paymentStatus"
-                value={paymentStatus}
-                onChange={(e) => setPaymentStatus(e.target.value)}
-                className="w-full p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300 bg-white"
-              >
-                <option value="paid">Paid</option>
-                <option value="pending">Pending</option>
-                <option value="partial">Partial</option>
-              </select>
-            </div>
+            {renderPaymentStatusSection()}
+
+            {paymentMethod !== 'cash' && paymentMethod !== 'credit' && (
+              <div>
+                <label htmlFor="downPayment" className="block text-sm font-medium text-gray-700 mb-2">Down Payment (PKR)</label>
+                <input
+                  type="text"
+                  id="downPayment"
+                  value={downPayment}
+                  onChange={(e) => {
+                    const rawValue = e.target.value;
+                    if (rawValue === '' || /^-?\d*\.?\d*$/.test(rawValue)) {
+                      setDownPayment(rawValue);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const value = parseFloat(e.target.value);
+                    setDownPayment(isNaN(value) || value < 0 ? 0 : value);
+                  }}
+                  className="w-full p-3 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border-gray-300"
+                  placeholder="0.00"
+                />
+              </div>
+            )}
 
             <div>
               <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">Notes</label>

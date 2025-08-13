@@ -1,6 +1,5 @@
 // backend/controllers/paymentController.js
-const { Payment, Customer } = require('../models');
-const { sequelize } = require('../models'); // Ensure sequelize is imported for transactions
+const db = require('../models'); // dynamic models and sequelize
 
 // Record a new payment for a customer
 exports.createPayment = async (req, res) => {
@@ -12,15 +11,15 @@ exports.createPayment = async (req, res) => {
 
     let transaction;
     try {
-        transaction = await sequelize.transaction();
+        transaction = await db.sequelize.transaction();
 
-        const customer = await Customer.findByPk(customerId, { transaction });
+        const customer = await db.Customer.findByPk(customerId, { transaction });
         if (!customer) {
             await transaction.rollback();
             return res.status(404).json({ error: 'Customer not found' });
         }
 
-        const payment = await Payment.create({
+        const payment = await db.Payment.create({
             customerId,
             amount: parseFloat(amount),
             paymentMethod,
@@ -50,7 +49,7 @@ exports.getCustomerPayments = async (req, res) => {
         return res.status(400).json({ error: 'Customer ID is required.' });
     }
     try {
-        const payments = await Payment.findAll({
+        const payments = await db.Payment.findAll({
             where: { customerId },
             order: [['paymentDate', 'DESC']]
         });
@@ -67,9 +66,9 @@ exports.deletePayment = async (req, res) => {
 
     let transaction;
     try {
-        transaction = await sequelize.transaction();
+        transaction = await db.sequelize.transaction();
 
-        const payment = await Payment.findByPk(paymentId, { transaction });
+        const payment = await db.Payment.findByPk(paymentId, { transaction });
         if (!payment) {
             await transaction.rollback();
             return res.status(404).json({ error: 'Payment not found.' });
@@ -82,7 +81,7 @@ exports.deletePayment = async (req, res) => {
         await payment.destroy({ transaction });
 
         // Find the customer and add the payment amount back to their outstanding balance
-        const customer = await Customer.findByPk(customerId, { transaction });
+        const customer = await db.Customer.findByPk(customerId, { transaction });
         if (customer) {
             customer.outstandingBalance = (parseFloat(customer.outstandingBalance) || 0) + parseFloat(amount);
             await customer.save({ transaction });

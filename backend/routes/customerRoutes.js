@@ -2,12 +2,20 @@ const express = require('express');
 const router = express.Router();
 const customerController = require('../controllers/customerController');
 const { protect } = require('../middleware/auth'); // Correctly import the 'protect' function
-
-// Apply the 'protect' middleware to each route that needs it.
-// The line 'router.use(authMiddleware)' has been removed.
+const { backupUpload } = require('../middleware/upload');
 
 // Get all customers with pagination and search
 router.get('/', protect, customerController.getCustomers);
+
+// Import customers via Excel
+router.post('/import', protect, (req, res, next) => {
+  backupUpload.single('file')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: 'Upload failed', details: err.message });
+    }
+    next();
+  });
+}, customerController.importCustomers);
 
 // Get a single customer by ID
 router.get('/:id', protect, customerController.getCustomerById);

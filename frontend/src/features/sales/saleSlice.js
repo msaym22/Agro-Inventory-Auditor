@@ -22,6 +22,7 @@ const initialState = {
     productsByQuantitySold: [], // NEW state for products by quantity sold
     customerHistory: null, // NEW state for detailed customer history
     productHistory: null, // NEW state for detailed product history
+    creditAnalytics: null, // NEW state for credit analytics
     loading: false, // Loading state for analytics data specifically
     error: null, // Error state for analytics data
   },
@@ -36,7 +37,15 @@ export const fetchSales = createAsyncThunk(
       const response = await salesAPI.getSales(params);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data || 'Failed to fetch sales');
+      let errorMessage = 'Failed to fetch sales';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.details) {
+        errorMessage = err.response.data.details;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -48,7 +57,15 @@ export const addNewSale = createAsyncThunk(
       const response = await salesAPI.createSale(saleData);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data || 'Failed to create sale');
+      let errorMessage = 'Failed to create sale';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.details) {
+        errorMessage = err.response.data.details;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -60,7 +77,15 @@ export const fetchSaleById = createAsyncThunk(
       const response = await salesAPI.getSaleById(id);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data || 'Failed to fetch sale');
+      let errorMessage = 'Failed to fetch sale';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.details) {
+        errorMessage = err.response.data.details;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -72,7 +97,15 @@ export const updateExistingSale = createAsyncThunk(
       const response = await salesAPI.updateSale(id, saleData);
       return response;
     } catch (err) {
-      return rejectWithValue(err.response?.data || 'Failed to update sale');
+      let errorMessage = 'Failed to update sale';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.details) {
+        errorMessage = err.response.data.details;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -84,7 +117,15 @@ export const deleteExistingSale = createAsyncThunk(
       await salesAPI.deleteSale(id);
       return id;
     } catch (err) {
-      return rejectWithValue(err.response?.data || 'Failed to delete sale');
+      let errorMessage = 'Failed to delete sale';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.details) {
+        errorMessage = err.response.data.details;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -97,7 +138,15 @@ export const fetchSalesAnalytics = createAsyncThunk(
       const response = await analyticsAPI.getSalesAnalytics(params);
       return response || {};
     } catch (err) {
-      return rejectWithValue(err.response?.data || 'Failed to fetch sales analytics');
+      let errorMessage = 'Failed to fetch sales analytics';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.details) {
+        errorMessage = err.response.data.details;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -109,7 +158,15 @@ export const fetchOverallProfit = createAsyncThunk(
       const response = await analyticsAPI.getOverallProfit(params);
       return response || {};
     } catch (err) {
-      return rejectWithValue(err.response?.data || 'Failed to fetch overall profit');
+      let errorMessage = 'Failed to fetch overall profit';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.details) {
+        errorMessage = err.response.data.details;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -121,7 +178,15 @@ export const fetchProfitByProduct = createAsyncThunk(
       const response = await analyticsAPI.getProfitByProduct(params);
       return response || {};
     } catch (err) {
-      return rejectWithValue(err.response?.data || 'Failed to fetch profit by product');
+      let errorMessage = 'Failed to fetch profit by product';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.details) {
+        errorMessage = err.response.data.details;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -133,7 +198,15 @@ export const fetchSalesByCustomerWithQuantity = createAsyncThunk(
       const response = await analyticsAPI.getSalesByCustomerWithQuantity(params);
       return response || {};
     } catch (err) {
-      return rejectWithValue(err.response?.data || 'Failed to fetch sales by customer');
+      let errorMessage = 'Failed to fetch sales by customer';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.details) {
+        errorMessage = err.response.data.details;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -146,7 +219,15 @@ export const fetchProductsByQuantitySold = createAsyncThunk(
       const response = await analyticsAPI.getProductsByQuantitySold(params);
       return response || {};
     } catch (err) {
-      return rejectWithValue(err.response?.data || 'Failed to fetch products by quantity sold');
+      let errorMessage = 'Failed to fetch products by quantity sold';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.details) {
+        errorMessage = err.response.data.details;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -159,7 +240,15 @@ export const fetchCustomerHistory = createAsyncThunk(
       const response = await analyticsAPI.getCustomerHistory(customerId, params);
       return response || {};
     } catch (err) {
-      return rejectWithValue(err.response?.data || 'Failed to fetch customer history');
+      let errorMessage = 'Failed to fetch customer history';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.details) {
+        errorMessage = err.response.data.details;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -172,7 +261,36 @@ export const fetchProductHistory = createAsyncThunk(
       const response = await analyticsAPI.getProductHistory(productId, params);
       return response || {};
     } catch (err) {
-      return rejectWithValue(err.response?.data || 'Failed to fetch product history');
+      let errorMessage = 'Failed to fetch product history';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.details) {
+        errorMessage = err.response.data.details;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+// NEW: Thunk to fetch credit analytics
+export const fetchCreditAnalytics = createAsyncThunk(
+  'sales/fetchCreditAnalytics',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await analyticsAPI.getCreditAnalytics();
+      return response || {};
+    } catch (err) {
+      let errorMessage = 'Failed to fetch credit analytics';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.details) {
+        errorMessage = err.response.data.details;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      return rejectWithValue(errorMessage);
     }
   }
 );
@@ -381,6 +499,21 @@ const salesSlice = createSlice({
         state.salesAnalytics.loading = false;
         state.salesAnalytics.error = action.payload;
         state.salesAnalytics.productHistory = null;
+      })
+      // NEW: Handle fetchCreditAnalytics
+      .addCase(fetchCreditAnalytics.pending, (state) => {
+        state.salesAnalytics.loading = true;
+        state.salesAnalytics.error = null;
+        state.salesAnalytics.creditAnalytics = null; // Clear previous history
+      })
+      .addCase(fetchCreditAnalytics.fulfilled, (state, action) => {
+        state.salesAnalytics.loading = false;
+        state.salesAnalytics.creditAnalytics = action.payload;
+      })
+      .addCase(fetchCreditAnalytics.rejected, (state, action) => {
+        state.salesAnalytics.loading = false;
+        state.salesAnalytics.error = action.payload;
+        state.salesAnalytics.creditAnalytics = null;
       });
   },
 });

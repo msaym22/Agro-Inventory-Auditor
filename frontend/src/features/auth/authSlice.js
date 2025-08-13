@@ -24,7 +24,6 @@ const authSlice = createSlice({
   initialState: {
     user: user || null,
     isAuthenticated: user ? true : false,
-    analyticsAuthenticated: false, // State for analytics access
     loading: false,
     error: null,
   },
@@ -63,7 +62,7 @@ const authSlice = createSlice({
         state.isAuthenticated = true;
         state.user = action.payload;
         localStorage.setItem('user', JSON.stringify(action.payload));
-        state.analyticsAuthenticated = false; // Analytics is not authenticated by main login
+        state.analyticsAuthenticated = true; // Keep analytics access granted by default
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;

@@ -1,19 +1,32 @@
-// backend/controllers/productController.js
-const { Product } = require('../models');
+const db = require('../models');
 const { Op } = require('sequelize');
+const XLSX = require('xlsx');
 
 const createProduct = async (req, res) => {
   try {
-    const productData = req.body;
+    const productData = req.body || {};
 
     if (req.file) {
-      productData.image = req.file.path;
+      const normalized = req.file.path.replace(/\\/g, '/');
+      const idx = normalized.lastIndexOf('/uploads/');
+      productData.image = idx !== -1 ? normalized.substring(idx + 1) : normalized;
     }
 
-    const product = await Product.create(productData);
+    // Normalize numeric fields
+    if (productData.sellingPrice !== undefined) productData.sellingPrice = parseFloat(productData.sellingPrice);
+    if (productData.purchasePrice !== undefined) {
+      productData.purchasePrice = productData.purchasePrice === '' || productData.purchasePrice === null
+        ? 0
+        : parseFloat(productData.purchasePrice);
+    }
+    if (productData.minimumPrice !== undefined) {
+      productData.minimumPrice = productData.minimumPrice === '' || productData.minimumPrice === null
+        ? 0
+        : parseFloat(productData.minimumPrice);
+    }
+    if (productData.stock !== undefined) productData.stock = productData.stock === '' ? 0 : parseInt(productData.stock);
 
-    // TODO: Add audit log if needed
-    // await logAudit('Product', product.id, 'create', productData, req.user.id);
+    const product = await db.Product.create(productData);
 
     res.status(201).json(product);
   } catch (err) {
@@ -22,30 +35,49 @@ const createProduct = async (req, res) => {
   }
 };
 
-exports.updateProduct = async (req, res) => {
+const updateProduct = async (req, res) => {
   try {
     const productId = req.params.id;
-    let updates = req.body;
+    const updates = req.body || {};
     
     if (req.file) {
-      updates.image = req.file.filename;
+      console.log('Received file for update:', req.file);
+      const normalized = req.file.path.replace(/\\/g, '/');
+      const idx = normalized.lastIndexOf('/uploads/');
+      updates.image = idx !== -1 ? normalized.substring(idx + 1) : normalized;
+    } else {
+      console.log('No file received for update.');
     }
     
-    // Convert numeric fields
-    if (updates.sellingPrice) updates.sellingPrice = parseFloat(updates.sellingPrice);
-    if (updates.purchasePrice) updates.purchasePrice = parseFloat(updates.purchasePrice);
-    if (updates.minimumPrice) updates.minimumPrice = parseFloat(updates.minimumPrice);
-    if (updates.stock) updates.stock = parseInt(updates.stock);
+    // Normalize numeric fields similar to create
+    if (updates.sellingPrice !== undefined) {
+      updates.sellingPrice = updates.sellingPrice === '' || updates.sellingPrice === null
+        ? 0
+        : parseFloat(updates.sellingPrice);
+    }
+    if (updates.purchasePrice !== undefined) {
+      updates.purchasePrice = updates.purchasePrice === '' || updates.purchasePrice === null
+        ? 0
+        : parseFloat(updates.purchasePrice);
+    }
+    if (updates.minimumPrice !== undefined) {
+      updates.minimumPrice = updates.minimumPrice === '' || updates.minimumPrice === null
+        ? 0
+        : parseFloat(updates.minimumPrice);
+    }
+    if (updates.stock !== undefined) {
+      updates.stock = updates.stock === '' || updates.stock === null
+        ? 0
+        : parseInt(updates.stock);
+    }
     
     // Remove id if present
     if (updates.id) delete updates.id;
     
-    const [updated] = await Product.update(updates, {
-      where: { id: productId }
-    });
+    const [updated] = await db.Product.update(updates, { where: { id: productId } });
 
     if (updated) {
-      const updatedProduct = await Product.findByPk(productId);
+      const updatedProduct = await db.Product.findByPk(productId);
       res.json(updatedProduct);
     } else {
       res.status(404).json({ error: 'Product not found' });
@@ -68,9 +100,9 @@ const getProducts = async (req, res) => {
 
   if (search) {
     where[Op.or] = [
-      { name: { [Op.iLike]: `%${search}%` } },
-      { nameUrdu: { [Op.iLike]: `%${search}%` } }
-    ];
+       { name: { [Op.like]: `%${search}%` } },
+       { nameUrdu: { [Op.like]: `%${search}%` } }
+     ];
   }
 
   if (category) {
@@ -86,7 +118,7 @@ const getProducts = async (req, res) => {
   try {
     const offset = (page - 1) * limit;
 
-    const { count = 0, rows = [] } = await Product.findAndCountAll({
+    const { count = 0, rows = [] } = await db.Product.findAndCountAll({
       where,
       order: [['name', 'ASC']],
       limit: parseInt(limit),
@@ -113,7 +145,7 @@ const getProducts = async (req, res) => {
 
 const getProductById = async (req, res) => {
   try {
-    const product = await Product.findByPk(req.params.id);
+    const product = await db.Product.findByPk(req.params.id);
 
     if (product) {
       res.json(product);
@@ -127,26 +159,65 @@ const getProductById = async (req, res) => {
 };
 
 const deleteProduct = async (req, res) => {
+  let transaction;
   try {
-    const product = await Product.findByPk(req.params.id);
+    const models = db;
+
+    transaction = await db.Product.sequelize.transaction();
+
+    const product = await db.Product.findByPk(req.params.id, {
+      include: [{ model: models.SaleItem, as: 'saleItems' }],
+      transaction
+    });
 
     if (!product) {
+      await transaction.rollback();
       return res.status(404).json({ error: 'Product not found' });
     }
 
-    const deleted = await Product.destroy({
-      where: { id: req.params.id }
-    });
+    // If the product is part of any sale items, we will delete those sale items,
+    // and delete their parent sales if they become empty. Also restore stock.
+    const saleItemList = product.saleItems || [];
+    if (saleItemList.length > 0) {
+      // Group sale items by saleId
+      const saleIdToItems = new Map();
+      for (const item of saleItemList) {
+        if (!saleIdToItems.has(item.saleId)) saleIdToItems.set(item.saleId, []);
+        saleIdToItems.get(item.saleId).push(item);
+      }
 
-    if (deleted) {
-      // TODO: Add audit log if needed
-      res.status(204).send();
-    } else {
-      res.status(404).json({ error: 'Product not found' });
+      // Restore stock for each sale item of this product and delete those items
+      for (const items of saleIdToItems.values()) {
+        for (const item of items) {
+          // Restore stock of this product
+          product.stock = (product.stock || 0) + item.quantity;
+        }
+      }
+      await product.save({ transaction });
+
+      // Delete all sale items for this product
+      await models.SaleItem.destroy({ where: { productId: product.id }, transaction });
+
+      // For each affected sale, if it has no remaining items, delete the sale as well
+      for (const [saleId] of saleIdToItems) {
+        const remainingCount = await models.SaleItem.count({ where: { saleId }, transaction });
+        if (remainingCount === 0) {
+          // Also remove payments associated to that sale
+          await models.Payment.destroy({ where: { saleId }, transaction });
+          await models.Sale.destroy({ where: { id: saleId }, transaction });
+        }
+      }
     }
+
+    // Finally delete the product
+    await db.Product.destroy({ where: { id: product.id }, transaction });
+
+    await transaction.commit();
+    return res.status(204).send();
   } catch (err) {
-    console.error('Product deletion failed:', err);
-    res.status(500).json({ error: 'Deletion failed', details: err.message });
+    if (transaction) await transaction.rollback();
+    console.error('Product deletion failed (cascade):', err);
+    return res.status(500).json({ error: 'Deletion failed', details: err.message });
   }
 };
 
@@ -181,6 +252,58 @@ const checkLowStock = async (req, res) => {
   }
 };
 
+const importProducts = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    const workbook = XLSX.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null });
+
+    const results = { created: 0, updated: 0, skipped: 0 };
+
+    for (const row of rows) {
+      const name = row.name || row.Name || row.product || row.Product;
+      if (!name) { results.skipped++; continue; }
+
+      const existing = await Product.findOne({ where: { name } });
+      const payload = {
+        name,
+        nameUrdu: row.nameUrdu || row.NameUrdu || null,
+        category: row.category || row.Category || null,
+        storageLocation: row.storageLocation || row.Location || row.SKU || null,
+        sellingPrice: row.sellingPrice != null ? parseFloat(row.sellingPrice) : undefined,
+        purchasePrice: row.purchasePrice != null ? parseFloat(row.purchasePrice) : undefined,
+        minimumPrice: row.minimumPrice != null ? parseFloat(row.minimumPrice) : undefined,
+        stock: row.stock != null ? parseInt(row.stock) : undefined,
+        description: row.description || null,
+        supplier: row.supplier || null,
+      };
+
+      // Remove undefined to avoid overwriting with undefined
+      Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+
+      if (existing) {
+        await existing.update(payload);
+        results.updated++;
+      } else {
+        // Ensure required fields
+        if (payload.sellingPrice == null) payload.sellingPrice = 0;
+        if (payload.purchasePrice == null) payload.purchasePrice = 0;
+        if (payload.stock == null) payload.stock = 0;
+        await Product.create(payload);
+        results.created++;
+      }
+    }
+
+    res.json({ message: 'Import completed', results });
+  } catch (err) {
+    console.error('Import products failed:', err);
+    res.status(500).json({ error: 'Import failed', details: err.message });
+  }
+};
+
 module.exports = {
   createProduct,
   updateProduct,
@@ -188,5 +311,6 @@ module.exports = {
   getProductById,
   deleteProduct,
   bulkUpdate,
-  checkLowStock
+  checkLowStock,
+  importProducts
 };

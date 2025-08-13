@@ -3,9 +3,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import ProductForm from '../../components/products/ProductForm';
-import productsAPI from '../../api/products';
 import { toast } from 'react-toastify';
-import { fetchProducts } from '../../features/products/productSlice';
+import { createProduct } from '../../features/products/productSlice';
 
 export const NewProduct = () => {
   const [productData, setProductData] = useState({
@@ -57,8 +56,9 @@ export const NewProduct = () => {
     const dataToSubmit = {
       ...productData,
       sellingPrice: parseFloat(productData.sellingPrice),
-      purchasePrice: productData.purchasePrice !== '' ? parseFloat(productData.purchasePrice) : null,
-      minimumPrice: productData.minimumPrice !== '' ? parseFloat(productData.minimumPrice) : null,
+      // Send 0 for empty numeric fields to satisfy backend allowNull: false
+      purchasePrice: productData.purchasePrice !== '' ? parseFloat(productData.purchasePrice) : 0,
+      minimumPrice: productData.minimumPrice !== '' ? parseFloat(productData.minimumPrice) : 0,
       stock: parseInt(productData.stock),
       expiryDate: productData.expiryDate || null,
     };
@@ -74,9 +74,8 @@ export const NewProduct = () => {
         formData.append('image', imageFile);
       }
 
-      await productsAPI.createProduct(formData);
+      await dispatch(createProduct(formData)).unwrap();
       toast.success('Product created successfully!');
-      dispatch(fetchProducts());
       navigate('/products');
     } catch (error) {
       console.error('Failed to create product:', error);

@@ -88,6 +88,16 @@ const analyticsAPI = {
       throw error;
     }
   },
+
+  // NEW: API call to fetch credit analytics
+  getCreditAnalytics: async () => {
+    try {
+      const response = await api.get('/analytics/credit');
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
 };
 
 export default analyticsAPI;

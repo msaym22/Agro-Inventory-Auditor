@@ -12,14 +12,11 @@ const API = axios.create({
 });
 
 // Add response interceptor
+// Preserve the full Axios error object so callers can reliably access
+// error.response.status and error.response.data across the app.
 API.interceptors.response.use(
   response => response,
-  error => {
-    if (error.response) {
-      return Promise.reject(error.response.data);
-    }
-    return Promise.reject(error);
-  }
+  error => Promise.reject(error)
 );
 
 export default API;

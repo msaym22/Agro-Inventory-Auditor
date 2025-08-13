@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { useNavigate, Link } from 'react-router-dom';
-import { addNewCustomer } from '../../features/customers/customerSlice';
+import { addCustomer } from '../../features/customers/customerSlice';
 import CustomerForm from '../../components/customers/CustomerForm';
 import { toast } from 'react-toastify';
 import { Button } from '../../components/common/Button';
@@ -15,7 +15,7 @@ const NewCustomer = () => {
   const handleSubmit = async (customerData) => {
     setLoading(true);
     try {
-      await dispatch(addNewCustomer(customerData)).unwrap();
+      await dispatch(addCustomer(customerData)).unwrap();
       toast.success('Customer added successfully!');
       navigate('/customers');
     } catch (error) {

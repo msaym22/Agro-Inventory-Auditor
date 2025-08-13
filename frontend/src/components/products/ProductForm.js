@@ -122,12 +122,15 @@ const ProductForm = ({
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 shadow-sm bg-white"
               >
                 <option value="">Select Category</option>
-                <option value="seeds">Seeds</option>
-                <option value="fertilizers">Fertilizers</option>
-                <option value="pesticides">Pesticides</option>
-                <option value="tools">Tools</option>
-                <option value="equipment">Equipment</option>
-                <option value="other">Other</option>
+                <option value="fiat">fiat</option>
+                <option value="messi">messi</option>
+                <option value="spery">spery</option>
+                <option value="kabuta">kabuta</option>
+                <option value="lawada">lawada</option>
+                <option value="electronics">electronics</option>
+                <option value="hardware">hardware</option>
+                <option value="lubricants">lubricants</option>
+                <option value="berring">berring</option>
               </select>
             </div>
           </div>

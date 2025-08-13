@@ -32,6 +32,7 @@ const FileUpload = ({ onFileSelect, accept, multiple = false, buttonText = "Sele
       </Button>
       <input
         type="file"
+        name="image"
         className="hidden"
         onChange={handleFileChange}
         accept={accept}

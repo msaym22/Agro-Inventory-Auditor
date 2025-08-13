@@ -1,6 +1,6 @@
 // msaym22/almadina-agro/Almadina-Agro-abd29d75b3664b7b4eb5cb4c7bcae0d6f2c03885/backend/controllers/analyticsController.js
 const { Sale, Product, Customer, SaleItem } = require('../models');
-const { sequelize } = require('../models'); // Import the sequelize instance
+const { sequelize } = require('../models'); // Import the sequelize instance (will be reloaded)
 const { Op } = require('sequelize');
 const moment = require('moment');
 
@@ -145,6 +145,8 @@ const getOverallProfit = async (req, res) => {
   const { period, startDate, endDate } = req.query;
   const dateConditions = getDateRangeConditions(period, startDate, endDate);
 
+  console.log('getOverallProfit called with:', { period, startDate, endDate, dateConditions });
+
   try {
     const profitItems = await SaleItem.findAll({
       attributes: [
@@ -166,12 +168,25 @@ const getOverallProfit = async (req, res) => {
       raw: true,
     });
 
-    const totalProfit = profitItems.reduce((sum, item) => {
-      const quantity = item.quantity || 0;
-      const priceAtSale = item.priceAtSale || 0;
-      const purchasePrice = item['product.purchasePrice'] || 0;
-      return sum + (quantity * (priceAtSale - purchasePrice));
-    }, 0);
+    console.log('Found profit items:', profitItems.length);
+    console.log('Sample profit item:', profitItems[0]);
+
+    let totalProfit = 0;
+    profitItems.forEach(item => {
+      const quantity = parseFloat(item.quantity) || 0;
+      const priceAtSale = parseFloat(item.priceAtSale) || 0;
+      const purchasePrice = parseFloat(item['product.purchasePrice']) || 0;
+      
+      console.log('Processing item:', { quantity, priceAtSale, purchasePrice });
+      
+      if (purchasePrice > 0) {
+        const itemProfit = quantity * (priceAtSale - purchasePrice);
+        totalProfit += itemProfit;
+        console.log('Item profit:', itemProfit, 'Running total:', totalProfit);
+      }
+    });
+
+    console.log('Final total profit:', totalProfit);
 
     res.json({ totalProfit: parseFloat(totalProfit || 0).toFixed(2) });
   }  catch (err) {
@@ -189,6 +204,8 @@ const getOverallProfit = async (req, res) => {
 const getProfitByProduct = async (req, res) => {
   const { period, startDate, endDate } = req.query;
   const dateConditions = getDateRangeConditions(period, startDate, endDate);
+
+  console.log('getProfitByProduct called with:', { period, startDate, endDate, dateConditions });
 
   try {
     const profitByProductRaw = await SaleItem.findAll({
@@ -211,6 +228,9 @@ const getProfitByProduct = async (req, res) => {
       raw: true,
     });
 
+    console.log('Found profit by product items:', profitByProductRaw.length);
+    console.log('Sample profit by product item:', profitByProductRaw[0]);
+
     const profitMap = new Map(); // Use Map for better key management with objects
     profitByProductRaw.forEach(item => {
       const productName = item['product.name'];
@@ -219,6 +239,8 @@ const getProfitByProduct = async (req, res) => {
       const priceAtSale = item.priceAtSale || 0;
       const purchasePrice = item['product.purchasePrice'] || 0;
       const profit = quantity * (priceAtSale - purchasePrice);
+
+      console.log('Processing product item:', { productName, productId, quantity, priceAtSale, purchasePrice, profit });
 
       const key = `${productId}-${productName}`; // Use ID in key for uniqueness
 
@@ -241,6 +263,8 @@ const getProfitByProduct = async (req, res) => {
       .sort((a, b) => parseFloat(b.profit) - parseFloat(a.profit))
       .slice(0, 10); // Limit to top 10 after sorting
 
+    console.log('Final profit by product:', profitByProduct);
+
     res.json({
       profitByProduct: profitByProduct
     });
@@ -259,6 +283,8 @@ const getProfitByProduct = async (req, res) => {
 const getSalesByCustomerWithQuantity = async (req, res) => {
   const { period, startDate, endDate } = req.query;
   const dateConditions = getDateRangeConditions(period, startDate, endDate);
+
+  console.log('getSalesByCustomerWithQuantity called with:', { period, startDate, endDate, dateConditions });
 
   try {
     const salesByCustomerRaw = await Sale.findAll({
@@ -292,6 +318,9 @@ const getSalesByCustomerWithQuantity = async (req, res) => {
       nest: true, // Crucial for properly nesting included data with raw: true
     });
 
+    console.log('Found sales by customer raw data:', salesByCustomerRaw.length);
+    console.log('Sample sales by customer item:', salesByCustomerRaw[0]);
+
     const aggregatedSales = new Map(); // Use Map for grouping
     salesByCustomerRaw.forEach(row => {
       const customerId = row.customerId; // Get customer ID
@@ -300,6 +329,8 @@ const getSalesByCustomerWithQuantity = async (req, res) => {
       const quantitySold = parseFloat(row.items.quantity || 0); // Corrected access to nested quantity
       const priceAtSale = parseFloat(row.items.priceAtSale || 0); // Corrected access to nested priceAtSale
       const totalRevenue = quantitySold * priceAtSale;
+
+      console.log('Processing customer sale:', { customerId, customerName, productName, quantitySold, priceAtSale, totalRevenue });
 
       const key = customerId ? `${customerId}-${productName}` : `${customerName}-${productName}`; // Use customerId in key if available
 
@@ -324,6 +355,7 @@ const getSalesByCustomerWithQuantity = async (req, res) => {
       }))
       .sort((a, b) => parseFloat(b.totalRevenue) - parseFloat(a.totalRevenue)); // Sort by totalRevenue descending
 
+    console.log('Final sales by customer:', formattedSalesByCustomer);
 
     res.json({ salesByCustomer: formattedSalesByCustomer });
   } catch (err) {
@@ -683,6 +715,62 @@ const getMonthlySalesReport = async (req, res) => {
   }
 };
 
+// @desc    Get Credit Analytics
+// @route   GET /api/analytics/credit
+// @access  Private
+const getCreditAnalytics = async (req, res) => {
+  try {
+    // Get total credit across all customers
+    const totalCredit = await Customer.sum('outstandingBalance') || 0;
+    
+    // Get customers with credit, sorted by outstanding balance (highest first)
+    const creditCustomers = await Customer.findAll({
+      where: {
+        outstandingBalance: {
+          [Op.gt]: 0 // Greater than 0
+        }
+      },
+      attributes: [
+        'id',
+        'name',
+        'contact',
+        'address',
+        'outstandingBalance',
+        'creditLimit'
+      ],
+      order: [['outstandingBalance', 'DESC']], // Sort by outstanding balance descending
+      raw: true
+    });
+
+    // Calculate additional credit statistics
+    const totalCustomersWithCredit = creditCustomers.length;
+    const averageCreditPerCustomer = totalCustomersWithCredit > 0 ? totalCredit / totalCustomersWithCredit : 0;
+    
+    // Find customers exceeding credit limit
+    const customersExceedingLimit = creditCustomers.filter(customer => 
+      customer.creditLimit && customer.outstandingBalance > customer.creditLimit
+    );
+
+    res.json({
+      totalCredit: parseFloat(totalCredit).toFixed(2),
+      totalCustomersWithCredit,
+      averageCreditPerCustomer: parseFloat(averageCreditPerCustomer).toFixed(2),
+      customersExceedingLimit: customersExceedingLimit.length,
+      creditCustomers: creditCustomers.map(customer => ({
+        ...customer,
+        outstandingBalance: parseFloat(customer.outstandingBalance).toFixed(2),
+        creditLimit: customer.creditLimit ? parseFloat(customer.creditLimit).toFixed(2) : null,
+        isOverLimit: customer.creditLimit ? customer.outstandingBalance > customer.creditLimit : false
+      }))
+    });
+  } catch (err) {
+    console.error('Failed to fetch credit analytics:', err);
+    res.status(500).json({
+      message: 'Error fetching credit analytics',
+      error: process.env.NODE_ENV === 'development' ? err.stack : err.message
+    });
+  }
+};
 
 module.exports = {
   getSalesAnalytics,
@@ -694,4 +782,5 @@ module.exports = {
   getProductsByQuantitySold,
   getCustomerHistory,
   getProductHistory,
+  getCreditAnalytics,
 };

@@ -1,14 +1,26 @@
 {
   "development": {
     "storage": "database.sqlite",
-    "dialect": "sqlite"
+    "dialect": "sqlite",
+    "dialectOptions": {
+      "foreignKeys": true
+    },
+    "logging": false
   },
   "test": {
     "storage": "test.sqlite",
-    "dialect": "sqlite"
+    "dialect": "sqlite",
+    "dialectOptions": {
+      "foreignKeys": true
+    },
+    "logging": false
   },
   "production": {
     "storage": "prod.sqlite",
-    "dialect": "sqlite"
+    "dialect": "sqlite",
+    "dialectOptions": {
+      "foreignKeys": true
+    },
+    "logging": false
   }
 }

@@ -2,10 +2,10 @@ const express = require('express');
 const router = express.Router();
 const saleController = require('../controllers/saleController');
 const { protect } = require('../middleware/auth');
-const upload = require('../middleware/upload');
+const { imageUpload } = require('../middleware/upload');
 
 // Route to create a new sale with optional image upload
-router.post('/', protect, upload.single('receiptImage'), saleController.createSale);
+router.post('/', protect, imageUpload.single('receiptImage'), saleController.createSale);
 
 // Route to get all sales with pagination and search
 router.get('/', protect, saleController.getSales);
