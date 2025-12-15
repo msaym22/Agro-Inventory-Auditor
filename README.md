@@ -29,3 +29,8 @@ Unlike standard inventory apps, this system features a **Bulk Migration Engine**
 | **Database** | MongoDB | NoSQL document storage for flexible asset attributes. |
 | **ETL Tool** | `xlsx` / Multer | Middleware for parsing and buffer management during file uploads. |
 
+## 📸 Usage Workflow
+1.  **Upload:** Admin uploads a standard Inventory Sheet (`.xlsx`).
+2.  **Parse:** Server validates data types (Integers vs Strings) and checks for duplicates.
+3.  **Commit:** Clean data is bulk-inserted into the `Inventory` collection.
+4.  **Visualize:** Dashboard immediately reflects new stock levels.
