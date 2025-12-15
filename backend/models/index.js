@@ -7,10 +7,23 @@ const config = require(__dirname + '/../config/config.json')[env];
 const db = {};
 
 let sequelize;
-if (config.use_env_variable) {
-  sequelize = new Sequelize(process.env[config.use_env_variable], config);
+
+// Ensure SQLite storage path is absolute so it points to backend/database.sqlite
+// regardless of where the server process is started from (project root vs backend).
+if (config && config.dialect === 'sqlite' && config.storage) {
+  // Mutate a shallow copy to avoid side effects if config is reused elsewhere
+  const sqliteConfig = { ...config, storage: path.resolve(__dirname, '..', config.storage) };
+  if (sqliteConfig.use_env_variable) {
+    sequelize = new Sequelize(process.env[sqliteConfig.use_env_variable], sqliteConfig);
+  } else {
+    sequelize = new Sequelize(sqliteConfig);
+  }
 } else {
-  sequelize = new Sequelize(config);
+  if (config.use_env_variable) {
+    sequelize = new Sequelize(process.env[config.use_env_variable], config);
+  } else {
+    sequelize = new Sequelize(config);
+  }
 }
 
 fs.readdirSync(__dirname)
@@ -44,8 +57,15 @@ db.reloadSequelize = async () => {
       try { await db.sequelize.close(); } catch (_) {}
     }
 
-    // Recreate sequelize instance
-    if (config.use_env_variable) {
+    // Recreate sequelize instance (mirror initial absolute SQLite storage resolution)
+    if (config && config.dialect === 'sqlite' && config.storage) {
+      const sqliteConfig = { ...config, storage: path.resolve(__dirname, '..', config.storage) };
+      if (sqliteConfig.use_env_variable) {
+        sequelize = new Sequelize(process.env[sqliteConfig.use_env_variable], sqliteConfig);
+      } else {
+        sequelize = new Sequelize(sqliteConfig);
+      }
+    } else if (config.use_env_variable) {
       sequelize = new Sequelize(process.env[config.use_env_variable], config);
     } else {
       sequelize = new Sequelize(config);

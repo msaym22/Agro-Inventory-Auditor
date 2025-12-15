@@ -82,9 +82,34 @@ const backupUpload = multer({
   fileFilter: backupFileFilter
 });
 
+// Excel file upload configuration
+const excelFileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const allowedExt = ['.xlsx', '.xls'];
+  const extname = allowedExt.includes(ext);
+  const mimetype = [
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/octet-stream'
+  ].includes((file.mimetype || '').toLowerCase());
+
+  if (extname || mimetype) {
+    return cb(null, true);
+  } else {
+    cb(new Error('Only Excel files (.xlsx, .xls) are allowed!'));
+  }
+};
+
+const excelUpload = multer({
+  storage: storage, // Use the same storage as images (uploads directory)
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB for Excel files
+  fileFilter: excelFileFilter
+});
+
 module.exports = {
   imageUpload,
   backupUpload,
+  excelUpload,
   uploadsDir,
   backupsDir,
 };

@@ -3,12 +3,11 @@ const db = require('../models'); // dynamic models to survive reloads
 const { Op } = require('sequelize');
 const XLSX = require('xlsx');
 
-// Get all customers with pagination and search
+// Get all customers with optional pagination and search
 exports.getCustomers = async (req, res) => {
   const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 20;
+  const limit = parseInt(req.query.limit); // No default limit
   const search = req.query.search || '';
-  const offset = (page - 1) * limit;
 
   try {
     const whereClause = search ? {
@@ -19,20 +18,32 @@ exports.getCustomers = async (req, res) => {
       ]
     } : {};
 
-    const { count, rows } = await db.Customer.findAndCountAll({
+    // If no limit is specified, get all customers without pagination
+    const queryOptions = {
       where: whereClause,
-      limit,
-      offset,
       order: [['createdAt', 'DESC']]
-    });
+    };
+
+    // Only add pagination if limit is specified
+    if (limit) {
+      const offset = (page - 1) * limit;
+      queryOptions.limit = limit;
+      queryOptions.offset = offset;
+    }
+
+    const { count, rows } = await db.Customer.findAndCountAll(queryOptions);
+
+    // If no limit, all customers are on one page
+    const totalPages = limit ? Math.ceil(count / limit) : 1;
+    const itemsPerPage = limit ? limit : count;
 
     res.json({
       customers: rows,
       pagination: {
         currentPage: page,
-        totalPages: Math.ceil(count / limit),
+        totalPages,
         totalItems: count,
-        itemsPerPage: limit
+        itemsPerPage
       }
     });
   } catch (error) {
@@ -51,19 +62,33 @@ exports.getCustomers = async (req, res) => {
               { address: { [Op.iLike]: `%${search}%` } }
             ]
           } : {};
-          const { count, rows } = await db.Customer.findAndCountAll({
+
+          // If no limit is specified, get all customers without pagination
+          const queryOptions = {
             where: whereClause,
-            limit,
-            offset,
             order: [['createdAt', 'DESC']]
-          });
+          };
+
+          // Only add pagination if limit is specified
+          if (limit) {
+            const offset = (page - 1) * limit;
+            queryOptions.limit = limit;
+            queryOptions.offset = offset;
+          }
+
+          const { count, rows } = await db.Customer.findAndCountAll(queryOptions);
+
+          // If no limit, all customers are on one page
+          const totalPages = limit ? Math.ceil(count / limit) : 1;
+          const itemsPerPage = limit ? limit : count;
+
           return res.json({
             customers: rows,
             pagination: {
               currentPage: page,
-              totalPages: Math.ceil(count / limit),
+              totalPages,
               totalItems: count,
-              itemsPerPage: limit
+              itemsPerPage
             }
           });
         }

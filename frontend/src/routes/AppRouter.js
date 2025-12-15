@@ -10,6 +10,7 @@ import DashboardLayout from '../layouts/DashboardLayout';
 import Login from '../pages/auth/Login';
 import Dashboard from '../pages/dashboard/Dashboard';
 import ProductListPage from '../pages/products/ProductListPage';
+import LowStockProductsPage from '../pages/products/LowStockProductsPage';
 import NewProduct from '../pages/products/NewProduct';
 import EditProduct from '../pages/products/EditProduct';
 import ProductDetail from '../pages/products/ProductDetail';
@@ -25,11 +26,26 @@ import AnalyticsLoginPage from '../pages/analytics/AnalyticsLoginPage';
 import AnalyticsPage from '../pages/analytics/AnalyticsPage';
 import GoogleDriveSettings from '../pages/settings/GoogleDriveSettings';
 import NotFound from '../pages/404';
+import AccountantPage from '../pages/accounting/AccountantPage';
+import CameraDetection from '../pages/ai/CameraDetection';
+import Training from '../pages/ai/Training';
 
 // PrivateRoute component to protect routes
 const PrivateRoute = ({ children }) => {
   const isAuthenticated = useSelector(state => state.auth.isAuthenticated);
   return isAuthenticated ? children : <Navigate to="/login" />;
+};
+
+// Protect analytics page with password
+const AnalyticsProtectedRoute = ({ children }) => {
+  const analyticsAuthenticated = useSelector(state => state.auth.analyticsAuthenticated);
+  return analyticsAuthenticated ? children : <Navigate to="/analytics-login" replace />;
+};
+
+// Protect accountant page with separate password path but same password
+const AccountantProtectedRoute = ({ children }) => {
+  const accountantAuthenticated = useSelector(state => state.auth.accountantAuthenticated);
+  return accountantAuthenticated ? children : <Navigate to="/accountant-login" replace />;
 };
 
 const AppRouter = () => {
@@ -39,6 +55,7 @@ const AppRouter = () => {
       <Route element={<MainLayout />}>
         <Route path="/login" element={<Login />} />
         <Route path="/analytics-login" element={<AnalyticsLoginPage />} />
+        <Route path="/accountant-login" element={<AnalyticsLoginPage />} />
       </Route>
 
       {/* Protected Routes */}
@@ -48,6 +65,7 @@ const AppRouter = () => {
         
         {/* Product Routes */}
         <Route path="/products" element={<ProductListPage />} />
+        <Route path="/products/low-stock" element={<LowStockProductsPage />} />
         <Route path="/products/new" element={<NewProduct />} />
         <Route path="/products/edit/:id" element={<EditProduct />} />
         <Route path="/products/:id" element={<ProductDetail />} />
@@ -63,9 +81,14 @@ const AppRouter = () => {
         <Route path="/sales/new" element={<NewSale />} />
         <Route path="/sales/:id" element={<SaleDetail />} />
         
-        {/* Backup & Analytics */}
+        {/* Backup, Analytics, Accounting */}
         <Route path="/backup-restore" element={<BackupRestore />} />
-        <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/analytics" element={<AnalyticsProtectedRoute><AnalyticsPage /></AnalyticsProtectedRoute>} />
+        <Route path="/accounting" element={<AccountantProtectedRoute><AccountantPage /></AccountantProtectedRoute>} />
+        
+        {/* AI Detection and Training */}
+        <Route path="/ai/detect" element={<CameraDetection />} />
+        <Route path="/ai/training" element={<Training />} />
         
         {/* Settings Route */}
         <Route path="/settings/drive" element={<GoogleDriveSettings />} />

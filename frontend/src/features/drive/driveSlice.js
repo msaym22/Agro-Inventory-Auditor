@@ -91,9 +91,9 @@ export const fetchDriveStatus = createAsyncThunk(
 
 export const pullFromDrive = createAsyncThunk(
   'drive/pullFromDrive',
-  async (_, { rejectWithValue }) => {
+  async (mergeMode = false, { rejectWithValue }) => {
     try {
-      const response = await updateDatabaseFromDrive();
+      const response = await updateDatabaseFromDrive(mergeMode);
       return response.data;
     } catch (error) {
       let errorMessage = 'Failed to pull from drive';
@@ -113,9 +113,12 @@ export const pushToDrive = createAsyncThunk(
   'drive/pushToDrive',
   async (_, { rejectWithValue }) => {
     try {
+      console.log('Starting push to drive...');
       const response = await updateDriveFromDatabase();
+      console.log('Push response:', response.data);
       return response.data;
     } catch (error) {
+      console.error('Push to drive error:', error);
       let errorMessage = 'Failed to push to drive';
       if (error.response?.data?.error) {
         errorMessage = error.response.data.error;
@@ -124,6 +127,7 @@ export const pushToDrive = createAsyncThunk(
       } else if (error.message) {
         errorMessage = error.message;
       }
+      console.error('Push error message:', errorMessage);
       return rejectWithValue(errorMessage);
     }
   }
@@ -146,6 +150,9 @@ const driveSlice = createSlice({
     },
     clearError: (state) => {
       state.error = null;
+    },
+    clearSuccessMessage: (state) => {
+      state.successMessage = null;
     }
   },
   extraReducers: (builder) => {
@@ -204,17 +211,21 @@ const driveSlice = createSlice({
         state.error = action.payload || 'Pull failed'; 
       })
       .addCase(pushToDrive.pending, (state) => { 
+        console.log('Push to drive pending...');
         state.isSyncing = true; 
         state.error = null; 
       })
       .addCase(pushToDrive.fulfilled, (state, action) => { 
+        console.log('Push to drive fulfilled:', action.payload);
         state.isSyncing = false; 
         state.lastSync = new Date().toISOString();
         state.error = null;
       })
       .addCase(pushToDrive.rejected, (state, action) => { 
+        console.log('Push to drive rejected:', action.payload);
         state.isSyncing = false; 
         state.error = action.payload || 'Push failed'; 
+        console.error('Push to drive failed:', action.payload);
       })
       
       // Handle fetchDriveStatus
@@ -228,5 +239,5 @@ const driveSlice = createSlice({
   }
 });
 
-export const { setAuthUrl, clearError } = driveSlice.actions;
+export const { setAuthUrl, clearError, clearSuccessMessage } = driveSlice.actions;
 export default driveSlice.reducer;

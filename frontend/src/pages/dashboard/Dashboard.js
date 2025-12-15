@@ -5,7 +5,6 @@ import { FaCloudUploadAlt } from 'react-icons/fa';
 
 // Components
 import QuickStats from '../../components/dashboard/QuickStats';
-import SalesSummary from '../../components/dashboard/SalesSummary';
 import LowStockAlert from '../../components/dashboard/LowStockAlert';
 import Loading from '../../components/common/Loading';
 
@@ -31,11 +30,10 @@ const Dashboard = () => {
     error: customersError 
   } = useSelector(state => state.customers);
   
-  const { 
-    items: sales = [], 
-    loading: salesLoading, 
-    error: salesError 
-  } = useSelector(state => state.sales);
+  // Remove sales-specific KPIs from main dashboard per request
+  const sales = [];
+  const salesLoading = false;
+  const salesError = null;
 
   // Get drive sync state
   const { isSyncing, lastSync } = useSelector(state => state.drive);
@@ -45,9 +43,9 @@ const Dashboard = () => {
     const loadAllDashboardData = async () => {
       try {
         await Promise.allSettled([
-          dispatch(fetchProducts({ page: 1, limit: 100 })),
-          dispatch(fetchCustomers({ page: 1, limit: 100 })),
-          dispatch(fetchSales({ page: 1, limit: 10, search: '' })),
+          dispatch(fetchProducts()),
+          dispatch(fetchCustomers()),
+          dispatch(fetchSales({ search: '' })),
         ]);
       } catch (error) {
         toast.error("Failed to load dashboard data");
@@ -62,7 +60,7 @@ const Dashboard = () => {
   const overallError = productsError || customersError || salesError;
 
   // Compute stats
-  const totalSalesCount = sales?.length || 0;
+  const totalSalesCount = 0;
   const totalCustomersCount = customers?.length || 0;
   const lowStockProducts = Array.isArray(products) 
     ? products.filter(p => p.stock < 10) 
@@ -129,8 +127,7 @@ const Dashboard = () => {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <SalesSummary sales={sales} />
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 mt-6">
         <LowStockAlert products={lowStockProducts} />
       </div>
     </div>

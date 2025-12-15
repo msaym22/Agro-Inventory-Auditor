@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { FaExclamationTriangle } from 'react-icons/fa';
 import { ProductList } from '../../components/products/ProductList';
+import DuplicateProductsManager from '../../components/products/DuplicateProductsManager';
 import { Button } from '../../components/common/Button';
 import Loading from '../../components/common/Loading';
 import { fetchProducts, removeProduct } from '../../features/products/productSlice';
@@ -18,6 +20,7 @@ export const ProductListPage = () => {
   const error = useSelector((state) => state.products.error);
 
   const [importFile, setImportFile] = useState(null);
+  const [showDuplicates, setShowDuplicates] = useState(false);
 
   useEffect(() => {
     dispatch(fetchProducts());
@@ -47,18 +50,35 @@ export const ProductListPage = () => {
   };
 
   const handleImport = async () => {
+    console.log('Import button clicked, file:', importFile);
+    
     if (!importFile) {
       toast.warn('Please choose an Excel file (.xlsx or .xls)');
       return;
     }
+    
+    console.log('Starting import with file:', importFile.name, 'Size:', importFile.size);
+    toast.info('Starting import...');
+    
     try {
       const res = await productsAPI.importProducts(importFile);
-      toast.success(`Import done. Created: ${res.results?.created || 0}, Updated: ${res.results?.updated || 0}, Skipped: ${res.results?.skipped || 0}`);
+      console.log('Import response:', res);
+      
+      const message = `Import completed! Created: ${res.results?.created || 0}, Updated: ${res.results?.updated || 0}, Skipped: ${res.results?.skipped || 0}`;
+      
+      if (res.results?.errors && res.results.errors.length > 0) {
+        toast.warn(`${message}. Errors: ${res.results.errors.length}`);
+        console.log('Import errors:', res.results.errors);
+      } else {
+        toast.success(message);
+      }
+      
       setImportFile(null);
       dispatch(fetchProducts());
     } catch (e) {
       console.error('Import failed', e);
-      toast.error('Import failed');
+      const errorMessage = e.response?.data?.error || e.message || 'Import failed';
+      toast.error(`Import failed: ${errorMessage}`);
     }
   };
 
@@ -70,18 +90,62 @@ export const ProductListPage = () => {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
         <h1 className="text-3xl font-bold text-gray-800">Product Catalog</h1>
         <div className="flex items-center gap-3">
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-            className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none"
-          />
-          <Button onClick={handleImport} variant="secondary" size="medium">Import Excel</Button>
+          <div className="flex flex-col">
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                console.log('File selected:', file);
+                setImportFile(file);
+              }}
+              className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none"
+            />
+            {importFile && (
+              <span className="text-xs text-green-600 mt-1">
+                Selected: {importFile.name} ({(importFile.size / 1024).toFixed(1)} KB)
+              </span>
+            )}
+          </div>
+          <Button 
+            onClick={handleImport} 
+            variant="secondary" 
+            size="medium"
+            disabled={!importFile}
+          >
+            Import Excel
+          </Button>
+          <Button 
+            onClick={() => setShowDuplicates(!showDuplicates)} 
+            variant={showDuplicates ? "secondary" : "primary"} 
+            size="medium"
+          >
+            {showDuplicates ? 'Hide Duplicates' : 'Check Duplicates'}
+          </Button>
+          <Button 
+            onClick={() => navigate('/products/low-stock')} 
+            variant="secondary" 
+            size="medium"
+          >
+            <FaExclamationTriangle className="mr-2" />
+            Low Stock
+          </Button>
           <Button onClick={handleCreate} variant="primary" size="large">
             Add New Product
           </Button>
         </div>
       </div>
+
+      {showDuplicates && (
+        <div className="mb-8">
+          <DuplicateProductsManager 
+            onDuplicatesResolved={() => {
+              setShowDuplicates(false);
+              dispatch(fetchProducts()); // Refresh the product list
+            }}
+          />
+        </div>
+      )}
 
       {products && products.length === 0 ? (
         <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-100 text-center py-12 text-gray-600">

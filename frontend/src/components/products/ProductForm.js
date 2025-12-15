@@ -46,7 +46,7 @@ const ProductForm = ({
                 name="nameUrdu"
                 value={product.nameUrdu || ''} // New field for Urdu name
                 onChange={onChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 shadow-sm"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 shadow-sm urdu-font"
                 placeholder="مثلاً، سپر گروتھ کھاد"
                 dir="rtl" // Set direction to right-to-left for Urdu input
               />

@@ -66,8 +66,8 @@ const NewSale = () => {
 
   // Fetch initial data on component mount
   useEffect(() => {
-    dispatch(fetchCustomers({ page: 1, limit: 100 }));
-    dispatch(fetchProducts({ page: 1, limit: 100 }));
+    dispatch(fetchCustomers());
+    dispatch(fetchProducts());
   }, [dispatch]);
 
   // Handle new customer creation error (if it happens during direct API call in handleSubmitSale)
@@ -79,8 +79,9 @@ const NewSale = () => {
 
 
   const handleCustomerSelect = (customer) => {
-    setSelectedCustomer(customer);
-    setCustomerSearchTerm(customer ? customer.name : '');
+    // Accept null to clear selection without flashing
+    setSelectedCustomer(customer || null);
+    setCustomerSearchTerm(customer && customer.name ? customer.name : '');
     setIsNewCustomerMode(false);
     setNewUnsavedCustomerData({ name: '', contact: '', address: '', creditLimit: 0 });
   };
@@ -116,6 +117,10 @@ const NewSale = () => {
   };
 
   const addProductToSale = (product) => {
+    if (!product || !product.id) {
+      // Ignore clears or invalid selections
+      return;
+    }
     const existingItemIndex = saleItems.findIndex(item => item.productId === product.id);
 
     if (existingItemIndex > -1) {
@@ -151,6 +156,19 @@ const NewSale = () => {
   };
 
   const updateQuantity = (productId, newQuantity) => {
+    // Allow empty string for user to clear and retype
+    if (newQuantity === '') {
+      setSaleItems(prev =>
+        prev.map(item => {
+          if (item.productId === productId) {
+            return { ...item, quantity: '' };
+          }
+          return item;
+        })
+      );
+      return;
+    }
+
     const quantity = parseInt(newQuantity);
     if (isNaN(quantity) || quantity < 1) return;
 
@@ -171,7 +189,10 @@ const NewSale = () => {
 
   const calculateTotal = () => {
     const subtotal = saleItems.reduce(
-      (sum, item) => sum + (item.price * item.quantity), 0
+      (sum, item) => {
+        const quantity = typeof item.quantity === 'string' ? parseInt(item.quantity) || 0 : item.quantity;
+        return sum + (item.price * quantity);
+      }, 0
     );
     const parsedDiscount = parseFloat(discount) || 0;
     return {
@@ -480,7 +501,7 @@ const NewSale = () => {
                       className="w-full p-3 border border-gray-300 rounded-md text-center focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
-                  <div className="col-span-2 text-right font-semibold text-gray-800">PKR {(item.price * item.quantity).toFixed(2)}</div>
+                  <div className="col-span-2 text-right font-semibold text-gray-800">PKR {(item.price * (typeof item.quantity === 'string' ? parseInt(item.quantity) || 0 : item.quantity)).toFixed(2)}</div>
                   <div className="col-span-2 flex justify-center">
                     <Button
                       type="button"

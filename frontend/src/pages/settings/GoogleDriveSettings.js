@@ -7,12 +7,19 @@ import {
   fetchDriveStatus,
   pullFromDrive,
   pushToDrive,
+  clearError,
 } from '../../features/drive/driveSlice';
+import { fetchProducts } from '../../features/products/productSlice';
+import { fetchCustomers } from '../../features/customers/customerSlice';
+import { fetchSales } from '../../features/sales/saleSlice';
 
 const GoogleDriveSettings = () => {
   const dispatch = useDispatch();
   const { authUrl, isAuthenticated, isSyncing, lastSync, error } = useSelector(state => state.drive);
   const [confirming, setConfirming] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [mergeMode, setMergeMode] = useState(false);
+  const [showAccountSwitch, setShowAccountSwitch] = useState(false);
 
   useEffect(() => {
     dispatch(fetchDriveStatus());
@@ -28,12 +35,65 @@ const GoogleDriveSettings = () => {
     }
   }, [dispatch]);
 
+  // Debug logging for error state
+  useEffect(() => {
+    console.log('Current error state:', error);
+    console.log('Current isSyncing state:', isSyncing);
+  }, [error, isSyncing]);
+
   const handleConnect = () => {
     if (authUrl) window.location.href = authUrl;
   };
 
-  const handlePull = () => dispatch(pullFromDrive()).then(() => dispatch(fetchDriveStatus()));
-  const handlePush = () => dispatch(pushToDrive()).then(() => dispatch(fetchDriveStatus()));
+  const handlePull = () => {
+    dispatch(clearError()); // Clear any existing errors
+    setSuccessMessage(''); // Clear success message
+    
+    // Use async/await for better error handling
+    const performPull = async () => {
+      try {
+        const result = await dispatch(pullFromDrive(mergeMode)).unwrap();
+        console.log('Pull completed successfully, result:', result);
+        dispatch(fetchDriveStatus());
+        // Refresh application data so UI reflects pulled DB
+        try {
+          await Promise.allSettled([
+            dispatch(fetchProducts()),
+            dispatch(fetchCustomers()),
+            dispatch(fetchSales({ search: '' }))
+          ]);
+        } catch (_) {}
+        setSuccessMessage(`Database ${mergeMode ? 'merged' : 'updated'} successfully from Drive!`);
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } catch (error) {
+        console.error('Pull failed with error:', error);
+        // Error is already handled by Redux slice
+      }
+    };
+    
+    performPull();
+  };
+  const handlePush = () => {
+    console.log('Push button clicked, clearing errors...');
+    dispatch(clearError()); // Clear any existing errors
+    setSuccessMessage(''); // Clear success message
+    
+    // Use async/await for better error handling
+    const performPush = async () => {
+      try {
+        const result = await dispatch(pushToDrive()).unwrap();
+        console.log('Push completed successfully, result:', result);
+        dispatch(fetchDriveStatus());
+        setSuccessMessage('Database pushed to Drive successfully!');
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } catch (error) {
+        console.error('Push failed with error:', error);
+        // Error is already handled by Redux slice
+      }
+    };
+    
+    performPush();
+  };
 
   return (
     <Box sx={{ p: 3 }}>
@@ -42,8 +102,23 @@ const GoogleDriveSettings = () => {
       </Typography>
 
       {error && (
-        <Typography color="error" sx={{ mb: 2 }}>
-          {error}
+        <Box sx={{ mb: 2, p: 2, bgcolor: 'error.light', borderRadius: 1 }}>
+          <Typography color="error">
+            Push failed: {error}
+          </Typography>
+          <Button 
+            size="small" 
+            onClick={() => dispatch(clearError())}
+            sx={{ mt: 1 }}
+          >
+            Clear Error
+          </Button>
+        </Box>
+      )}
+
+      {successMessage && (
+        <Typography color="success.main" sx={{ mb: 2, p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
+          {successMessage}
         </Typography>
       )}
 
@@ -56,6 +131,61 @@ const GoogleDriveSettings = () => {
 
       {isAuthenticated ? (
         <>
+          {/* Account Management */}
+          <Box sx={{ mb: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Account Management
+            </Typography>
+            <Button 
+              variant="outlined" 
+              size="small"
+              onClick={() => setShowAccountSwitch(!showAccountSwitch)}
+              sx={{ mb: 1 }}
+            >
+              {showAccountSwitch ? 'Hide' : 'Switch Google Account'}
+            </Button>
+            {showAccountSwitch && (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  To switch accounts, disconnect and reconnect with a different Google account.
+                </Typography>
+                <Button 
+                  variant="outlined" 
+                  color="error" 
+                  size="small"
+                  onClick={() => {
+                    // Clear current authentication
+                    localStorage.removeItem('persist:drive');
+                    window.location.reload();
+                  }}
+                >
+                  Disconnect Current Account
+                </Button>
+              </Box>
+            )}
+          </Box>
+
+          {/* Merge Mode Settings */}
+          <Box sx={{ mb: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Database Update Mode
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <input
+                type="checkbox"
+                id="mergeMode"
+                checked={mergeMode}
+                onChange={(e) => setMergeMode(e.target.checked)}
+              />
+              <label htmlFor="mergeMode">
+                <Typography variant="body2">
+                  Merge Mode: When enabled, pulling from Drive will merge data instead of replacing the entire database
+                </Typography>
+              </label>
+            </Box>
+          </Box>
+
+          {/* Action Buttons */}
           <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
             <Button 
               variant="contained" 

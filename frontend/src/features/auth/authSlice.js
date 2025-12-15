@@ -26,6 +26,9 @@ const authSlice = createSlice({
     isAuthenticated: user ? true : false,
     loading: false,
     error: null,
+    analyticsAuthenticated: false,
+    accountantAuthenticated: false,
+    trainingAuthenticated: false,
   },
   reducers: {
     // These reducers are now handled by extraReducers for async thunk,
@@ -40,6 +43,8 @@ const authSlice = createSlice({
       state.loading = false;
       state.error = null;
       state.analyticsAuthenticated = false; // Reset analytics auth on logout
+      state.accountantAuthenticated = false; // Reset accountant auth on logout
+      state.trainingAuthenticated = false; // Reset training auth on logout
       localStorage.removeItem('user');
       // If you persist analyticsAuthenticated in localStorage, clear it here too
       // localStorage.removeItem('analyticsAuthenticated');
@@ -49,6 +54,16 @@ const authSlice = createSlice({
       state.analyticsAuthenticated = action.payload;
       // If you want analytics authentication to persist across refreshes:
       // localStorage.setItem('analyticsAuthenticated', action.payload.toString());
+    },
+    // Reducer to explicitly set accountant authentication status
+    setAccountantAuthenticated: (state, action) => {
+      state.accountantAuthenticated = action.payload;
+      // If you want accountant authentication to persist across refreshes:
+      // localStorage.setItem('accountantAuthenticated', action.payload.toString());
+    },
+    // Reducer to explicitly set training authentication status
+    setTrainingAuthenticated: (state, action) => {
+      state.trainingAuthenticated = action.payload;
     },
   },
   extraReducers: (builder) => { // NEW: Handle actions dispatched by loginUser thunk
@@ -63,6 +78,7 @@ const authSlice = createSlice({
         state.user = action.payload;
         localStorage.setItem('user', JSON.stringify(action.payload));
         state.analyticsAuthenticated = true; // Keep analytics access granted by default
+        state.accountantAuthenticated = true; // Keep accountant access granted by default
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
@@ -71,10 +87,11 @@ const authSlice = createSlice({
         state.error = action.payload;
         localStorage.removeItem('user');
         state.analyticsAuthenticated = false;
+        state.accountantAuthenticated = false;
       });
-  },
+  }
 });
 
 // Export the newly defined thunk and any other synchronous actions
-export const { logout, setAnalyticsAuthenticated } = authSlice.actions; 
+export const { logout, setAnalyticsAuthenticated, setAccountantAuthenticated, setTrainingAuthenticated } = authSlice.actions; 
 export default authSlice.reducer;

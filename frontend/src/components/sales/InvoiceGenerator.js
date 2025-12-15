@@ -22,6 +22,9 @@ const InvoiceGenerator = ({ invoiceData }) => {
     companyName: { en: 'Almadina Agro Vehari', ur: 'المدینہ ایگرو وہاڑی' },
     companySlogan: { en: 'Agricultural Products Supplier', ur: 'زرعی مصنوعات کا سپلائر' },
     companyAddress: { en: 'Vehari, Punjab, Pakistan', ur: 'وہاڑی، پنجاب، پاکستان' },
+    owners: { en: 'Owners:', ur: 'مالکان:' },
+    owner1: { en: 'Naveed Anjum: 03014117740', ur: 'نوید انجم: 03014117740' },
+    owner2: { en: 'Saleemullah: 03099843192', ur: 'سلیم اللہ: 03099843192' },
     invoiceTitle: { en: 'Invoice', ur: 'انوائس' },
     customerInfo: { en: 'Invoice To:', ur: 'خریدار کی معلومات:' },
     customer: { en: 'Customer', ur: 'خریدار' },
@@ -131,7 +134,15 @@ const InvoiceGenerator = ({ invoiceData }) => {
     doc.text(reverseText(getTranslation('companySlogan')), doc.internal.pageSize.getWidth() / 2, 28, { align: 'center' });
     doc.setFontSize(12);
     doc.text(reverseText(getTranslation('companyAddress')), doc.internal.pageSize.getWidth() / 2, 35, { align: 'center' });
-    doc.text(reverseText(getTranslation('invoiceTitle')), doc.internal.pageSize.getWidth() / 2, 45, { align: 'center' });
+    
+    // Owner Information
+    doc.setFontSize(10);
+    doc.text(reverseText(getTranslation('owners')), doc.internal.pageSize.getWidth() / 2, 42, { align: 'center' });
+    doc.text(reverseText(getTranslation('owner1')), doc.internal.pageSize.getWidth() / 2, 48, { align: 'center' });
+    doc.text(reverseText(getTranslation('owner2')), doc.internal.pageSize.getWidth() / 2, 54, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.text(reverseText(getTranslation('invoiceTitle')), doc.internal.pageSize.getWidth() / 2, 62, { align: 'center' });
 
     // Customer Info & Date/Payment
     doc.setFontSize(10);
@@ -141,21 +152,21 @@ const InvoiceGenerator = ({ invoiceData }) => {
     const saleDate = invoiceData.date ? new Date(invoiceData.date).toLocaleDateString(currentLanguage === 'ur' ? 'ur-PK' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' }) : getTranslation('na');
 
     if (currentLanguage === 'ur') {
-      doc.text(reverseText(`${getTranslation('customer')}: ${customerName}`), doc.internal.pageSize.getWidth() - 14, 60, { align: 'right' });
-      doc.text(reverseText(`${getTranslation('contact')}: ${customerContact}`), doc.internal.pageSize.getWidth() - 14, 65, { align: 'right' });
-      doc.text(reverseText(`${getTranslation('address')}: ${customerAddress}`), doc.internal.pageSize.getWidth() - 14, 70, { align: 'right' });
+      doc.text(reverseText(`${getTranslation('customer')}: ${customerName}`), doc.internal.pageSize.getWidth() - 14, 72, { align: 'right' });
+      doc.text(reverseText(`${getTranslation('contact')}: ${customerContact}`), doc.internal.pageSize.getWidth() - 14, 77, { align: 'right' });
+      doc.text(reverseText(`${getTranslation('address')}: ${customerAddress}`), doc.internal.pageSize.getWidth() - 14, 82, { align: 'right' });
 
-      doc.text(reverseText(`${getTranslation('date')}: ${saleDate}`), 14, 60, { align: 'left' });
-      doc.text(reverseText(`${getTranslation('paymentMethod')}: ${getTranslation(invoiceData.paymentMethod, invoiceData.paymentMethod)}`), 14, 65, { align: 'left' });
-      doc.text(reverseText(`${getTranslation('status')}: ${getTranslation(invoiceData.paymentStatus, invoiceData.paymentStatus)}`), 14, 70, { align: 'left' });
+      doc.text(reverseText(`${getTranslation('date')}: ${saleDate}`), 14, 72, { align: 'left' });
+      doc.text(reverseText(`${getTranslation('paymentMethod')}: ${getTranslation(invoiceData.paymentMethod, invoiceData.paymentMethod)}`), 14, 77, { align: 'left' });
+      doc.text(reverseText(`${getTranslation('status')}: ${getTranslation(invoiceData.paymentStatus, invoiceData.paymentStatus)}`), 14, 82, { align: 'left' });
     } else {
-      doc.text(`${getTranslation('customer')}: ${customerName}`, 14, 60);
-      doc.text(`${getTranslation('contact')}: ${customerContact}`, 14, 65);
-      doc.text(`${getTranslation('address')}: ${customerAddress}`, 14, 70);
+      doc.text(`${getTranslation('customer')}: ${customerName}`, 14, 72);
+      doc.text(`${getTranslation('contact')}: ${customerContact}`, 14, 77);
+      doc.text(`${getTranslation('address')}: ${customerAddress}`, 14, 82);
 
-      doc.text(`${getTranslation('date')}: ${saleDate}`, doc.internal.pageSize.getWidth() - 14, 60, { align: 'right' });
-      doc.text(`${getTranslation('paymentMethod')}: ${getTranslation(invoiceData.paymentMethod, invoiceData.paymentMethod)}`, doc.internal.pageSize.getWidth() - 14, 65, { align: 'right' });
-      doc.text(`${getTranslation('status')}: ${getTranslation(invoiceData.paymentStatus, invoiceData.paymentStatus)}`, doc.internal.pageSize.getWidth() - 14, 70, { align: 'right' });
+      doc.text(`${getTranslation('date')}: ${saleDate}`, doc.internal.pageSize.getWidth() - 14, 72, { align: 'right' });
+      doc.text(`${getTranslation('paymentMethod')}: ${getTranslation(invoiceData.paymentMethod, invoiceData.paymentMethod)}`, doc.internal.pageSize.getWidth() - 14, 77, { align: 'right' });
+      doc.text(`${getTranslation('status')}: ${getTranslation(invoiceData.paymentStatus, invoiceData.paymentStatus)}`, doc.internal.pageSize.getWidth() - 14, 82, { align: 'right' });
     }
 
     // Table Headers and Data for PDF
@@ -220,10 +231,9 @@ const InvoiceGenerator = ({ invoiceData }) => {
     doc.setFont(currentLanguage === 'ur' ? 'Jameel Noori Nastaleeq' : 'Helvetica', 'normal');
     const textAlignment = currentLanguage === 'ur' ? 'right' : 'right';
 
-    // Removed CURRENCY from total calculations for PDF
-    doc.text(reverseText(`${getTranslation('subTotal')}: ${(invoiceData.subTotal || 0).toFixed(2)}`), doc.internal.pageSize.getWidth() - 14, finalY, { align: textAlignment });
-    doc.text(reverseText(`${getTranslation('discount')}: ${(invoiceData.discount || 0).toFixed(2)}`), doc.internal.pageSize.getWidth() - 14, finalY + 7, { align: textAlignment });
-    doc.text(reverseText(`${getTranslation('grandTotal')}: ${(invoiceData.grandTotal || 0).toFixed(2)}`), doc.internal.pageSize.getWidth() - 14, finalY + 14, { align: textAlignment });
+    // Removed CURRENCY from total calculations for PDF and removed subtotal line
+    doc.text(reverseText(`${getTranslation('discount')}: ${(invoiceData.discount || 0).toFixed(2)}`), doc.internal.pageSize.getWidth() - 14, finalY, { align: textAlignment });
+    doc.text(reverseText(`${getTranslation('grandTotal')}: ${(invoiceData.grandTotal || 0).toFixed(2)}`), doc.internal.pageSize.getWidth() - 14, finalY + 7, { align: textAlignment });
 
     // Notes
     if (invoiceData.notes) {
@@ -284,6 +294,14 @@ const InvoiceGenerator = ({ invoiceData }) => {
             <h1 className="text-4xl font-extrabold text-green-800 mb-2">{getTranslation('companyName')}</h1> {/* Added branding classes */}
             <p className="text-lg text-gray-700">{getTranslation('companySlogan')}</p> {/* Added branding classes */}
             <p className="text-md text-gray-500">{getTranslation('companyAddress')}</p> {/* Added branding classes */}
+            
+            {/* Owner Information */}
+            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm font-semibold text-green-800 mb-1">{getTranslation('owners')}</p>
+              <p className="text-sm text-green-700">{getTranslation('owner1')}</p>
+              <p className="text-sm text-green-700">{getTranslation('owner2')}</p>
+            </div>
+            
             <h2 className="text-2xl font-bold mt-4">{getTranslation('invoiceTitle')}</h2>
           </div>
 
@@ -319,12 +337,6 @@ const InvoiceGenerator = ({ invoiceData }) => {
                 ))}
               </tbody>
               <tfoot>
-                <tr>
-                  <td colSpan="3" className={`border p-2 font-semibold ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{getTranslation('subTotal')}</td>
-                  <td className="border p-2 font-semibold text-right">
-                    {(invoiceData.subTotal || 0).toFixed(2)} {/* Removed CURRENCY */}
-                  </td>
-                </tr>
                 <tr>
                   <td colSpan="3" className={`border p-2 font-semibold ${currentLanguage === 'ur' ? 'text-right-rtl' : 'text-right'}`}>{getTranslation('discount')}</td>
                   <td className="border p-2 font-semibold text-right">

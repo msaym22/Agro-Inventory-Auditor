@@ -89,6 +89,29 @@ export const importProducts = async (file) => {
   return response.data;
 };
 
+export const findDuplicateProducts = async () => {
+  try {
+    const response = await api.get('/products/duplicates');
+    return response.data;
+  } catch (error) {
+    console.error('Find duplicate products error:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const mergeDuplicateProducts = async (productIds, keepProductId) => {
+  try {
+    const response = await api.post('/products/merge-duplicates', {
+      productIds,
+      keepProductId
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Merge duplicate products error:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
 const productsAPI = {
   createProduct,
   getProducts,
@@ -99,6 +122,8 @@ const productsAPI = {
   bulkUpdateProducts,
   checkLowStock,
   importProducts,
+  findDuplicateProducts,
+  mergeDuplicateProducts,
 };
 
 export default productsAPI;

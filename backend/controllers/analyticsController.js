@@ -1,8 +1,27 @@
 // msaym22/almadina-agro/Almadina-Agro-abd29d75b3664b7b4eb5cb4c7bcae0d6f2c03885/backend/controllers/analyticsController.js
-const { Sale, Product, Customer, SaleItem } = require('../models');
-const { sequelize } = require('../models'); // Import the sequelize instance (will be reloaded)
+const db = require('../models'); // Always use dynamic references to survive reloads
 const { Op } = require('sequelize');
 const moment = require('moment');
+
+// Helper function to retry database operations with connection recovery
+const retryWithConnection = async (operation, maxRetries = 3) => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (error.message.includes('ConnectionManager.getConnection') && error.message.includes('closed') && attempt < maxRetries) {
+        console.log(`Database connection appears closed (attempt ${attempt}). Reloading Sequelize and retrying...`);
+        try {
+          await (db.reloadSequelize?.() || Promise.resolve(false));
+        } catch (_) { /* best-effort */ }
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        continue;
+      }
+      throw error;
+    }
+  }
+};
 
 // Helper to construct date conditions
 const getDateRangeConditions = (period, startDate, endDate) => {
@@ -70,39 +89,47 @@ const getSalesAnalytics = async (req, res) => {
   const dateConditions = getDateRangeConditions(period, startDate, endDate);
 
   try {
-    const totalSales = await Sale.count({ where: dateConditions });
-    const totalRevenueResult = await Sale.sum('totalAmount', { where: dateConditions });
+    const totalSales = await retryWithConnection(async () => {
+      return await db.Sale.count({ where: dateConditions });
+    });
+    const totalRevenueResult = await retryWithConnection(async () => {
+      return await db.Sale.sum('totalAmount', { where: dateConditions });
+    });
     const totalRevenue = totalRevenueResult || 0;
 
-    const salesByPeriod = await Sale.findAll({
-      attributes: [
-        [sequelize.fn('strftime', groupByFormat, sequelize.col('saleDate')), 'period'],
-        [sequelize.fn('SUM', sequelize.col('totalAmount')), 'total']
-      ],
-      where: dateConditions,
-      group: ['period'],
-      order: [['period', 'ASC']]
+    const salesByPeriod = await retryWithConnection(async () => {
+      return await db.Sale.findAll({
+        attributes: [
+          [db.sequelize.fn('strftime', groupByFormat, db.sequelize.col('saleDate')), 'period'],
+          [db.sequelize.fn('SUM', db.sequelize.col('totalAmount')), 'total']
+        ],
+        where: dateConditions,
+        group: ['period'],
+        order: [['period', 'ASC']]
+      });
     });
 
     // Fetch product sales performance (top products by revenue)
-    const productSalesRaw = await SaleItem.findAll({
-      attributes: [
-        'quantity',
-        'priceAtSale',
-      ],
-      include: [{
-        model: Product,
-        as: 'product',
-        attributes: ['name'],
-        required: true
-      }, {
-        model: Sale,
-        as: 'sale',
-        attributes: [],
-        required: true,
-        where: dateConditions // Apply date filter to associated Sale
-      }],
-      raw: true,
+    const productSalesRaw = await retryWithConnection(async () => {
+      return await db.SaleItem.findAll({
+        attributes: [
+          'quantity',
+          'priceAtSale',
+        ],
+        include: [{
+          model: db.Product,
+          as: 'product',
+          attributes: ['name'],
+            required: true
+        }, {
+          model: db.Sale,
+          as: 'sale',
+          attributes: [],
+          required: true,
+          where: dateConditions // Apply date filter to associated Sale
+        }],
+        raw: true,
+      });
     });
 
     const productSalesMap = productSalesRaw.reduce((acc, item) => {
@@ -148,24 +175,26 @@ const getOverallProfit = async (req, res) => {
   console.log('getOverallProfit called with:', { period, startDate, endDate, dateConditions });
 
   try {
-    const profitItems = await SaleItem.findAll({
-      attributes: [
-        'quantity',
-        'priceAtSale',
-      ],
-      include: [{
-        model: Product,
-        as: 'product',
-        attributes: ['purchasePrice'],
-        required: true
-      }, {
-        model: Sale,
-        as: 'sale',
-        attributes: [],
-        required: true,
-        where: dateConditions // Apply date filter to associated Sale
-      }],
-      raw: true,
+    const profitItems = await retryWithConnection(async () => {
+      return await db.SaleItem.findAll({
+        attributes: [
+          'quantity',
+          'priceAtSale',
+        ],
+        include: [{
+          model: db.Product,
+          as: 'product',
+          attributes: ['purchasePrice'],
+          required: true
+        }, {
+          model: db.Sale,
+          as: 'sale',
+          attributes: [],
+          required: true,
+          where: dateConditions // Apply date filter to associated Sale
+        }],
+        raw: true,
+      });
     });
 
     console.log('Found profit items:', profitItems.length);
@@ -208,24 +237,26 @@ const getProfitByProduct = async (req, res) => {
   console.log('getProfitByProduct called with:', { period, startDate, endDate, dateConditions });
 
   try {
-    const profitByProductRaw = await SaleItem.findAll({
-      attributes: [
-        'quantity',
-        'priceAtSale',
-      ],
-      include: [{
-        model: Product,
-        as: 'product',
-        attributes: ['id', 'name', 'purchasePrice'], // NEW: Include product ID
-        required: true
-      }, {
-        model: Sale,
-        as: 'sale',
-        attributes: [],
-        required: true,
-        where: dateConditions // Apply date filter to associated Sale
-      }],
-      raw: true,
+    const profitByProductRaw = await retryWithConnection(async () => {
+      return await db.SaleItem.findAll({
+        attributes: [
+          'quantity',
+          'priceAtSale',
+        ],
+        include: [{
+          model: db.Product,
+          as: 'product',
+          attributes: ['id', 'name', 'purchasePrice'], // NEW: Include product ID
+          required: true
+        }, {
+          model: db.Sale,
+          as: 'sale',
+          attributes: [],
+          required: true,
+          where: dateConditions // Apply date filter to associated Sale
+        }],
+        raw: true,
+      });
     });
 
     console.log('Found profit by product items:', profitByProductRaw.length);
@@ -287,35 +318,37 @@ const getSalesByCustomerWithQuantity = async (req, res) => {
   console.log('getSalesByCustomerWithQuantity called with:', { period, startDate, endDate, dateConditions });
 
   try {
-    const salesByCustomerRaw = await Sale.findAll({
-      attributes: [
-        'id', // Sale ID
-        [sequelize.col('customer.id'), 'customerId'], // NEW: Include customer ID
-        [sequelize.col('customer.name'), 'customerName'], // Customer name
-      ],
-      include: [
-        {
-          model: Customer,
-          as: 'customer',
-          attributes: [],
-          required: false // Use required: false for left join, as customer might be null (walk-in)
-        },
-        {
-          model: SaleItem,
-          as: 'items',
-          attributes: ['quantity', 'priceAtSale', 'productId'], // Include productId in SaleItem for linking
-          required: true,
-          include: [{
-            model: Product,
-            as: 'product',
-            attributes: ['name'], // Fetch product name
-            required: true
-          }],
-        },
-      ],
-      where: dateConditions, // Apply date filter to Sale
-      raw: true,
-      nest: true, // Crucial for properly nesting included data with raw: true
+    const salesByCustomerRaw = await retryWithConnection(async () => {
+      return await db.Sale.findAll({
+        attributes: [
+          'id', // Sale ID
+          [db.sequelize.col('customer.id'), 'customerId'], // NEW: Include customer ID
+          [db.sequelize.col('customer.name'), 'customerName'], // Customer name
+        ],
+        include: [
+          {
+            model: db.Customer,
+            as: 'customer',
+            attributes: [],
+            required: false // Use required: false for left join, as customer might be null (walk-in)
+          },
+          {
+            model: db.SaleItem,
+            as: 'items',
+            attributes: ['quantity', 'priceAtSale', 'productId'], // Include productId in SaleItem for linking
+            required: true,
+            include: [{
+              model: db.Product,
+              as: 'product',
+              attributes: ['name'], // Fetch product name
+              required: true
+            }],
+          },
+        ],
+        where: dateConditions, // Apply date filter to Sale
+        raw: true,
+        nest: true, // Crucial for properly nesting included data with raw: true
+      });
     });
 
     console.log('Found sales by customer raw data:', salesByCustomerRaw.length);
@@ -377,30 +410,32 @@ const getProductsByQuantitySold = async (req, res) => {
   const dateConditions = getDateRangeConditions(period, startDate, endDate);
 
   try {
-    const productsByQuantitySold = await SaleItem.findAll({
-      attributes: [
-        [sequelize.col('product.id'), 'productId'], // NEW: Include product ID
-        [sequelize.col('product.name'), 'productName'],
-        [sequelize.fn('SUM', sequelize.col('SaleItem.quantity')), 'totalQuantitySold'],
-      ],
-      include: [
-        {
-          model: Product,
-          as: 'product',
-          attributes: [],
-          required: true // INNER JOIN to ensure only products that exist are considered
-        },
-        {
-          model: Sale,
-          as: 'sale',
-          attributes: [],
-          required: true, // INNER JOIN to filter by saleDate
-          where: dateConditions
-        }
-      ],
-      group: ['product.id', 'product.name'], // Group by both ID and Name to ensure correct grouping
-      order: [[sequelize.literal('totalQuantitySold'), 'DESC']], // Order by sum of quantity
-      raw: true,
+    const productsByQuantitySold = await retryWithConnection(async () => {
+      return await db.SaleItem.findAll({
+        attributes: [
+          [db.sequelize.col('product.id'), 'productId'], // NEW: Include product ID
+          [db.sequelize.col('product.name'), 'productName'],
+          [db.sequelize.fn('SUM', db.sequelize.col('SaleItem.quantity')), 'totalQuantitySold'],
+        ],
+        include: [
+          {
+            model: db.Product,
+            as: 'product',
+            attributes: [],
+            required: true // INNER JOIN to ensure only products that exist are considered
+          },
+          {
+            model: db.Sale,
+            as: 'sale',
+            attributes: [],
+            required: true, // INNER JOIN to filter by saleDate
+            where: dateConditions
+          }
+        ],
+        group: ['product.id', 'product.name'], // Group by both ID and Name to ensure correct grouping
+        order: [[db.sequelize.literal('totalQuantitySold'), 'DESC']], // Order by sum of quantity
+        raw: true,
+      });
     });
 
     res.json({
@@ -444,34 +479,36 @@ const getCustomerHistory = async (req, res) => {
   }
 
   try {
-    const rawSalesData = await Sale.findAll({ // Renamed to rawSalesData
-      where: {
-        ...dateConditions // Apply date filter to Sale
-      },
-      include: [
-        {
-          model: Customer,
-          as: 'customer',
-          attributes: ['id', 'name'],
-          where: customerWhere, // Apply customer filter
-          required: false // Use LEFT OUTER JOIN for customer, so sales without customer are included
+    const rawSalesData = await retryWithConnection(async () => {
+      return await db.Sale.findAll({ // Renamed to rawSalesData
+        where: {
+          ...dateConditions // Apply date filter to Sale
         },
-        {
-          model: SaleItem,
-          as: 'items',
-          attributes: ['id', 'quantity', 'priceAtSale'], // Fetch item ID, quantity, price
-          required: false, // Make SaleItem optional to include sales with no items
-          include: [{
-            model: Product,
-            as: 'product',
-            attributes: ['id', 'name', 'purchasePrice', 'sellingPrice', 'nameUrdu'], // Product details
-            required: false // Product also optional if SaleItem is optional
-          }],
-        },
-      ],
-      order: [['saleDate', 'DESC']],
-      raw: true,
-      nest: true, // Crucial for properly nesting included data
+        include: [
+          {
+            model: db.Customer,
+            as: 'customer',
+            attributes: ['id', 'name'],
+            where: customerWhere, // Apply customer filter
+            required: false // Use LEFT OUTER JOIN for customer, so sales without customer are included
+          },
+          {
+            model: db.SaleItem,
+            as: 'items',
+            attributes: ['id', 'quantity', 'priceAtSale'], // Fetch item ID, quantity, price
+            required: false, // Make SaleItem optional to include sales with no items
+            include: [{
+              model: db.Product,
+              as: 'product',
+              attributes: ['id', 'name', 'purchasePrice', 'sellingPrice', 'nameUrdu'], // Product details
+              required: false // Product also optional if SaleItem is optional
+            }],
+          },
+        ],
+        order: [['saleDate', 'DESC']],
+        raw: true,
+        nest: true, // Crucial for properly nesting included data
+      });
     });
 
     // Manually group raw data by Sale ID since raw:true + nest:true with multiple items per sale flattens them
@@ -570,36 +607,38 @@ const getProductHistory = async (req, res) => {
   }
 
   try {
-    const rawProductSalesData = await SaleItem.findAll({ // Renamed to rawProductSalesData
-      attributes: ['quantity', 'priceAtSale'], // SaleItem attributes
-      where: { // Filter SaleItems by product
-        productId: productId || await Product.findOne({ where: productWhere, attributes: ['id'] }).then(p => p?.id), // Resolve ID if name provided
-      },
-      include: [
-        {
-          model: Sale,
-          as: 'sale',
-          attributes: ['id', 'saleDate', 'totalAmount', 'paymentMethod', 'paymentStatus'],
-          where: dateConditions, // Apply date filter to associated Sale
-          required: true,
-          include: [{
-            model: Customer,
-            as: 'customer',
-            attributes: ['id', 'name'],
-            required: false // Customer can be null (walk-in)
-          }]
+    const rawProductSalesData = await retryWithConnection(async () => {
+      return await SaleItem.findAll({ // Renamed to rawProductSalesData
+        attributes: ['quantity', 'priceAtSale'], // SaleItem attributes
+        where: { // Filter SaleItems by product
+          productId: productId || await Product.findOne({ where: productWhere, attributes: ['id'] }).then(p => p?.id), // Resolve ID if name provided
         },
-        {
-          model: Product,
-          as: 'product',
-          attributes: ['id', 'name', 'purchasePrice', 'sellingPrice'], // Product details
-          where: productWhere, // Apply product filter for verification/name resolution
-          required: true // Ensure product exists
-        }
-      ],
-      order: [[{ model: Sale, as: 'sale' }, 'saleDate', 'DESC']],
-      raw: true,
-      nest: true, // Crucial for properly nesting included data
+        include: [
+          {
+            model: Sale,
+            as: 'sale',
+            attributes: ['id', 'saleDate', 'totalAmount', 'paymentMethod', 'paymentStatus'],
+            where: dateConditions, // Apply date filter to associated Sale
+            required: true,
+            include: [{
+              model: Customer,
+              as: 'customer',
+              attributes: ['id', 'name'],
+              required: false // Customer can be null (walk-in)
+            }]
+          },
+          {
+            model: Product,
+            as: 'product',
+            attributes: ['id', 'name', 'purchasePrice', 'sellingPrice'], // Product details
+            where: productWhere, // Apply product filter for verification/name resolution
+            required: true // Ensure product exists
+          }
+        ],
+        order: [[{ model: Sale, as: 'sale' }, 'saleDate', 'DESC']],
+        raw: true,
+        nest: true, // Crucial for properly nesting included data
+      });
     });
 
     // If no sales found for the given product/name, return empty history
@@ -666,8 +705,11 @@ const getProductHistory = async (req, res) => {
 // @access  Private
 const getInventoryValuation = async (req, res) => {
   try {
-    const totalValuation = await Product.sum(sequelize.literal('stock * purchasePrice'));
-    const totalRetailValue = await Product.sum(sequelize.literal('stock * sellingPrice'));
+    const { totalValuation, totalRetailValue } = await retryWithConnection(async () => {
+      const totalValuationInner = await db.Product.sum(db.sequelize.literal('stock * purchasePrice'));
+      const totalRetailValueInner = await db.Product.sum(db.sequelize.literal('stock * sellingPrice'));
+      return { totalValuation: totalValuationInner, totalRetailValue: totalRetailValueInner };
+    });
 
     res.json({
       totalValuation: parseFloat(totalValuation || 0).toFixed(2),
@@ -690,14 +732,16 @@ const getMonthlySalesReport = async (req, res) => {
   const dateConditions = getDateRangeConditions('monthly', startDate, endDate); // Force monthly grouping for this report
 
   try {
-    const monthlySales = await Sale.findAll({
-      attributes: [
-        [sequelize.fn('strftime', '%Y-%m', sequelize.col('saleDate')), 'month'],
-        [sequelize.fn('SUM', sequelize.col('totalAmount')), 'totalSales']
-      ],
-      where: dateConditions,
-      group: ['month'],
-      order: [['month', 'ASC']]
+    const monthlySales = await retryWithConnection(async () => {
+      return await db.Sale.findAll({
+        attributes: [
+          [db.sequelize.fn('strftime', '%Y-%m', db.sequelize.col('saleDate')), 'month'],
+          [db.sequelize.fn('SUM', db.sequelize.col('totalAmount')), 'totalSales']
+        ],
+        where: dateConditions,
+        group: ['month'],
+        order: [['month', 'ASC']]
+      });
     });
 
     res.json({
@@ -721,25 +765,29 @@ const getMonthlySalesReport = async (req, res) => {
 const getCreditAnalytics = async (req, res) => {
   try {
     // Get total credit across all customers
-    const totalCredit = await Customer.sum('outstandingBalance') || 0;
+    const totalCredit = await retryWithConnection(async () => {
+      return await db.Customer.sum('outstandingBalance');
+    }) || 0;
     
     // Get customers with credit, sorted by outstanding balance (highest first)
-    const creditCustomers = await Customer.findAll({
-      where: {
-        outstandingBalance: {
-          [Op.gt]: 0 // Greater than 0
-        }
-      },
-      attributes: [
-        'id',
-        'name',
-        'contact',
-        'address',
-        'outstandingBalance',
-        'creditLimit'
-      ],
-      order: [['outstandingBalance', 'DESC']], // Sort by outstanding balance descending
-      raw: true
+    const creditCustomers = await retryWithConnection(async () => {
+      return await db.Customer.findAll({
+        where: {
+          outstandingBalance: {
+            [Op.gt]: 0 // Greater than 0
+          }
+        },
+        attributes: [
+          'id',
+          'name',
+          'contact',
+          'address',
+          'outstandingBalance',
+          'creditLimit'
+        ],
+        order: [['outstandingBalance', 'DESC']], // Sort by outstanding balance descending
+        raw: true
+      });
     });
 
     // Calculate additional credit statistics

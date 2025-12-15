@@ -6,9 +6,9 @@ import Fuse from 'fuse.js'; // Import Fuse.js
 
 const { THEME_COLORS } = config;
 
-// Added new props: data, searchKeys, onSelectResult, renderResult
-const SearchInput = ({ onSearch, placeholder = "Search...", debounceMs = 300, data = [], searchKeys = [], onSelectResult, renderResult }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+// Added new props: data, searchKeys, onSelectResult, renderResult, value
+const SearchInput = ({ onSearch, placeholder = "Search...", debounceMs = 300, data = [], searchKeys = [], onSelectResult, renderResult, value }) => {
+  const [searchTerm, setSearchTerm] = useState(value || '');
   const [showDropdown, setShowDropdown] = useState(false); // New state to control dropdown visibility
   const debouncedSearchTerm = useDebounce(searchTerm, debounceMs);
 
@@ -27,14 +27,21 @@ const SearchInput = ({ onSearch, placeholder = "Search...", debounceMs = 300, da
     return fuse.search(debouncedSearchTerm).map(result => result.item);
   }, [debouncedSearchTerm, fuse]);
 
+  // Sync internal state with external value prop
   useEffect(() => {
-    // Only call onSearch if it's explicitly provided and debouncedSearchTerm is not empty
-    if (onSearch && debouncedSearchTerm) {
-      onSearch(debouncedSearchTerm);
+    setSearchTerm(value || '');
+  }, [value]);
+
+  useEffect(() => {
+    // Only call onSearch if it's explicitly provided
+    if (typeof onSearch === 'function') {
+      onSearch(debouncedSearchTerm || '');
     }
-    // Control dropdown visibility based on results and search term
-    setShowDropdown(debouncedSearchTerm.length > 0 && filteredResults.length > 0);
+    // Control dropdown visibility based on current term and results
+    setShowDropdown((debouncedSearchTerm || '').length > 0 && filteredResults.length > 0);
   }, [debouncedSearchTerm, onSearch, filteredResults]);
+
+  // Removed immediate onSearch to prevent race conditions that revert characters
 
   const handleChange = (e) => {
     setSearchTerm(e.target.value);
@@ -45,12 +52,20 @@ const SearchInput = ({ onSearch, placeholder = "Search...", debounceMs = 300, da
   const handleClear = () => {
     setSearchTerm('');
     setShowDropdown(false); // Hide dropdown on clear
-    onSelectResult(null); // Clear selected item if any
+    // Guard: only call if provided
+    if (typeof onSelectResult === 'function') {
+      onSelectResult(null); // Notify parent about clear
+    }
+    if (typeof onSearch === 'function') {
+      onSearch(''); // Ensure parent value clears immediately
+    }
   };
 
   const handleResultClick = (item) => {
-    onSelectResult(item);
-    setSearchTerm(item[searchKeys[0]] || ''); // Set input to the primary search key of selected item
+    if (typeof onSelectResult === 'function') {
+      onSelectResult(item);
+    }
+    setSearchTerm(''); // Clear the search term after selection
     setShowDropdown(false); // Hide dropdown after selection
   };
 

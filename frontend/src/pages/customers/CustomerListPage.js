@@ -17,12 +17,11 @@ const CustomerListPage = () => {
   const error = useSelector(state => state.customers.error);
   const pagination = useSelector(state => state.customers.pagination);
 
-  const [currentPage, setCurrentPage] = useState(1);
   const [importFile, setImportFile] = useState(null);
 
   useEffect(() => {
-    dispatch(fetchCustomers({ page: currentPage }));
-  }, [dispatch, currentPage]);
+    dispatch(fetchCustomers());
+  }, [dispatch]);
 
   const handleSelectCustomer = (customer) => {
     navigate(`/customers/${customer.id}`);
@@ -61,8 +60,7 @@ const CustomerListPage = () => {
       const res = await importCustomersApi(importFile);
       toast.success(`Import done. Created: ${res.results?.created || 0}, Updated: ${res.results?.updated || 0}, Skipped: ${res.results?.skipped || 0}`);
       setImportFile(null);
-      dispatch(fetchCustomers({ page: 1 }));
-      setCurrentPage(1);
+      dispatch(fetchCustomers());
     } catch (e) {
       console.error('Import customers failed', e);
       toast.error('Import failed');
@@ -120,30 +118,9 @@ const CustomerListPage = () => {
           />
 
           {pagination && pagination.totalItems > 0 && (
-            <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
+            <div className="flex justify-center items-center mt-6 pt-4 border-t border-gray-100">
               <div className="text-gray-600 text-sm">
-                Showing {(pagination.currentPage - 1) * pagination.itemsPerPage + 1} - {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of {pagination.totalItems} customers
-              </div>
-              <div className="flex space-x-2">
-                <Button
-                  onClick={() => setCurrentPage(prev => prev - 1)}
-                  disabled={currentPage === 1}
-                  variant="secondary"
-                  size="small"
-                >
-                  Previous
-                </Button>
-                <span className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-sm">
-                  {currentPage}
-                </span>
-                <Button
-                  onClick={() => setCurrentPage(prev => prev + 1)}
-                  disabled={currentPage === pagination.totalPages}
-                  variant="secondary"
-                  size="small"
-                >
-                  Next
-                </Button>
+                Total: {pagination.totalItems} customers
               </div>
             </div>
           )}

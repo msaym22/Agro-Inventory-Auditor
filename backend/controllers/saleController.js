@@ -124,9 +124,8 @@ exports.createSale = async (req, res) => {
 
 exports.getSales = async (req, res) => {
   const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 20;
+  const limit = parseInt(req.query.limit); // No default limit
   const search = req.query.search || '';
-  const offset = (page - 1) * limit;
 
   try {
     let salesWhere = {};
@@ -215,21 +214,31 @@ exports.getSales = async (req, res) => {
       salesWhere.saleDate = { [Op.lte]: moment(req.query.endDate).endOf('day').toDate() };
     }
 
-    const { count, rows } = await db.Sale.findAndCountAll({
+    // If no limit is specified, get all sales without pagination
+    const queryOptions = {
       where: salesWhere,
       order: [['saleDate', 'DESC']],
-      limit: parseInt(limit),
-      offset: offset,
       include: includeOptions,
       distinct: true,
       col: 'id',
-    });
+    };
 
-    const totalPages = Math.ceil(count / limit);
+    // Only add pagination if limit is specified
+    if (limit) {
+      const offset = (page - 1) * limit;
+      queryOptions.limit = parseInt(limit);
+      queryOptions.offset = offset;
+    }
+
+    const { count, rows } = await db.Sale.findAndCountAll(queryOptions);
+
+    // If no limit, all sales are on one page
+    const totalPages = limit ? Math.ceil(count / limit) : 1;
+    const itemsPerPage = limit ? parseInt(limit) : count;
 
     res.json({
       sales: rows,
-      pagination: { totalItems: count, totalPages, currentPage: parseInt(page), itemsPerPage: parseInt(limit) }
+      pagination: { totalItems: count, totalPages, currentPage: parseInt(page), itemsPerPage }
     });
   } catch (err) {
     console.error('Failed to fetch sales:', err);

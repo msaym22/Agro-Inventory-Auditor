@@ -1,5 +1,6 @@
 // frontend/src/pages/products/NewProduct.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import config from '../../config/config';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import ProductForm from '../../components/products/ProductForm';
@@ -48,6 +49,35 @@ export const NewProduct = () => {
   const handleDescriptionChange = (html) => {
     setProductData(prev => ({ ...prev, description: html }));
   };
+
+  // Auto-translate English name to Urdu in real-time when Urdu is empty
+  useEffect(() => {
+    let abort = false;
+    const controller = new AbortController();
+    const { name, nameUrdu } = productData;
+    if (name && (!nameUrdu || nameUrdu.trim() === '')) {
+      const timeoutId = setTimeout(async () => {
+        try {
+          // Call backend proxy to avoid CORS
+          const base = (config.API_URL || '').replace(/\/$/, '');
+          const res = await fetch(`${base}/translate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ q: name, source: 'en', target: 'ur', format: 'text' }),
+            signal: controller.signal
+          });
+          if (!res.ok) return;
+          const json = await res.json();
+          if (!abort && json && json.translatedText) {
+            setProductData(prev => ({ ...prev, nameUrdu: json.translatedText }));
+          }
+        } catch (_) {
+          // ignore translation errors silently
+        }
+      }, 400); // debounce
+      return () => { abort = true; controller.abort(); clearTimeout(timeoutId); };
+    }
+  }, [productData.name]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

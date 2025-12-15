@@ -8,7 +8,8 @@ import {
   FaChartBar, 
   FaDatabase, 
   FaSignOutAlt,
-  FaCog 
+  FaCog,
+  FaCalculator
 } from 'react-icons/fa';
 
 const Sidebar = ({ onLogout, onShowAnalyticsLogin }) => {
@@ -47,6 +48,10 @@ const Sidebar = ({ onLogout, onShowAnalyticsLogin }) => {
         <NavLink to="/backup-restore" className={({ isActive }) => `${linkClasses} ${isActive ? activeLinkClasses : ''}`}>
           <FaDatabase className="mr-3" />
           Backup & Restore
+        </NavLink>
+        <NavLink to="/accounting" className={({ isActive }) => `${linkClasses} ${isActive ? activeLinkClasses : ''}`}>
+          <FaCalculator className="mr-3" />
+          Accountant
         </NavLink>
         {/* ADDED SETTINGS LINK */}
         <NavLink to="/settings/drive" className={({ isActive }) => `${linkClasses} ${isActive ? activeLinkClasses : ''}`}>

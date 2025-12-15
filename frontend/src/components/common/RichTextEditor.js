@@ -42,3 +42,4 @@ const RichTextEditor = ({ value, onChange }) => {
 };
 
 export default RichTextEditor;
+

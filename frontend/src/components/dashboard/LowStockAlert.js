@@ -40,7 +40,7 @@ const LowStockAlert = ({ products }) => {
 
       {products.length > 5 && (
         <div className="mt-8 text-center">
-          <Link to="/products?stock=low" className="text-lg text-red-700 font-semibold hover:underline flex items-center justify-center group">
+          <Link to="/products/low-stock" className="text-lg text-red-700 font-semibold hover:underline flex items-center justify-center group">
             View all {products.length} low stock items
             <svg className="ml-2 w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
           </Link>

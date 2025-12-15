@@ -1,10 +1,10 @@
 // frontend/src/pages/analytics/AnalyticsLoginPage.js
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch } from 'react-redux'; // Import useDispatch
 import { toast } from 'react-toastify';
 import { Button } from '../../components/common/Button';
-import { setAnalyticsAuthenticated } from '../../features/auth/authSlice'; // Import the new action
+import { setAnalyticsAuthenticated, setAccountantAuthenticated } from '../../features/auth/authSlice'; // Import both actions
 
 const ANALYTICS_PASSWORD = 'naveed1974'; // Hardcoded password for analytics access
 
@@ -12,21 +12,32 @@ const AnalyticsLoginPage = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch(); // Initialize useDispatch
+
+  // Determine if this is for analytics or accountant based on the path
+  const isForAccountant = location.pathname === '/accountant-login';
+  const pageTitle = isForAccountant ? 'Accountant Access' : 'Analytics Access';
+  const redirectPath = isForAccountant ? '/accounting' : '/analytics';
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setLoading(true);
 
     if (password === ANALYTICS_PASSWORD) {
-      // Dispatch Redux action to set analytics authentication status
-      dispatch(setAnalyticsAuthenticated(true)); // Set analyticsAuthenticated to true
-      console.log('AnalyticsLoginPage: Redux analyticsAuthenticated set to true.'); // Diagnostic log
+      // Dispatch Redux action based on the page type
+      if (isForAccountant) {
+        dispatch(setAccountantAuthenticated(true));
+        console.log('AnalyticsLoginPage: Redux accountantAuthenticated set to true.');
+      } else {
+        dispatch(setAnalyticsAuthenticated(true));
+        console.log('AnalyticsLoginPage: Redux analyticsAuthenticated set to true.');
+      }
 
-      toast.success('Analytics access granted!');
+      toast.success(`${pageTitle} granted!`);
       
-      // Navigate to the main analytics page. No need for setTimeout with Redux.
-      navigate('/analytics');
+      // Navigate to the appropriate page
+      navigate(redirectPath);
       
     } else {
       toast.error('Incorrect password.');
@@ -36,45 +47,39 @@ const AnalyticsLoginPage = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-10 rounded-xl shadow-lg border border-gray-100">
+      <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Analytics Access
+            {pageTitle}
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Enter password to view detailed analytics
+            Enter password to access {isForAccountant ? 'accounting features' : 'analytics dashboard'}
           </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="password" className="sr-only">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
+          <div>
+            <label htmlFor="password" className="sr-only">
+              Password
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              required
+              className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+              placeholder="Enter password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </div>
 
           <div>
             <Button
               type="submit"
-              fullWidth
-              loading={loading}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               disabled={loading}
-              variant="primary"
-              size="large"
             >
-              Access Analytics
+              {loading ? 'Verifying...' : 'Access'}
             </Button>
           </div>
         </form>

@@ -12,6 +12,11 @@ body {
   background-color: #f9fafb;
 }
 
+/* Reuse Urdu font stack from invoice for UI fields needing Urdu script */
+.urdu-font {
+  font-family: 'Jameel Noori Nastaleeq', 'Noto Naskh Urdu', 'Noto Sans Arabic', 'Inter', sans-serif;
+}
+
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;

@@ -13,7 +13,7 @@ const { CURRENCY } = config;
 
 const CATEGORIES = ['all','fiat','messi','spery','kabuta','lawada','electronics','hardware','lubricants','berring'];
 
-export const ProductList = ({ products, onEdit, onDelete, onView }) => {
+export const ProductList = ({ products, onEdit, onDelete, onView, showLowStockHighlight = false }) => {
   const dispatch = useDispatch();
   const [searchTerm, setSearchTerm] = useState('');
   const [searchMode, setSearchMode] = useState('name'); // 'name' or 'description'
@@ -70,7 +70,27 @@ export const ProductList = ({ products, onEdit, onDelete, onView }) => {
     { header: 'Location', accessor: 'storageLocation' },
     { header: 'Name', accessor: 'name' },
     { header: 'Category', accessor: 'category' },
-    { header: 'Stock', accessor: 'stock' },
+    { 
+      header: 'Stock', 
+      accessor: 'stock',
+      render: (product) => {
+        const stock = product.stock || 0;
+        if (showLowStockHighlight && stock <= 10) {
+          const isCritical = stock <= 5;
+          return (
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+              isCritical 
+                ? 'bg-red-100 text-red-800 border border-red-200' 
+                : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+            }`}>
+              {isCritical ? '🚨 ' : '⚠️ '}
+              {stock}
+            </span>
+          );
+        }
+        return stock;
+      }
+    },
     {
       header: `Price (${CURRENCY})`,
       accessor: 'sellingPrice',
@@ -167,6 +187,7 @@ export const ProductList = ({ products, onEdit, onDelete, onView }) => {
         data={filteredData}
         selectable={true}
         onSelectionChange={setSelectedIds}
+        onRowClick={row => onView && onView(row)}
         pagination={true}
         pageSize={10}
       />

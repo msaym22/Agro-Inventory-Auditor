@@ -13,9 +13,12 @@ const navLinks = [
   { to: '/products', label: 'Products', type: 'link' },
   { to: '/customers', label: 'Customers', type: 'link' },
   { to: '/sales', label: 'Orders', type: 'link' },
+  { to: '/ai/detect', label: 'AI Detection', type: 'link' },
+  { to: '/ai/training', label: 'Training', type: 'link' },
   { to: 'analytics-modal', label: 'Analytics', type: 'modal' }, // Triggers modal
   { to: '/backup-restore', label: 'Backup & Restore', type: 'link' },
   { to: '/settings/drive', label: 'Settings', type: 'link' }, // Added Settings link
+  { to: '/accounting', label: 'Accountant', type: 'modal' },
 ];
 
 const DashboardLayout = () => {
@@ -23,9 +26,10 @@ const DashboardLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const user = useSelector(state => state.auth.user);
-  const { analyticsAuthenticated } = useSelector(state => state.auth);
+  const { analyticsAuthenticated, accountantAuthenticated } = useSelector(state => state.auth);
 
   const [showAnalyticsPrompt, setShowAnalyticsPrompt] = useState(false);
+  const [showAccountantPrompt, setShowAccountantPrompt] = useState(false);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -40,8 +44,20 @@ const DashboardLayout = () => {
     }
   };
 
+  const handleAccountingClick = () => {
+    if (accountantAuthenticated) {
+      navigate('/accounting');
+    } else {
+      setShowAccountantPrompt(true);
+    }
+  };
+
   const handleCloseAnalyticsPrompt = () => {
     setShowAnalyticsPrompt(false);
+  };
+
+  const handleCloseAccountantPrompt = () => {
+    setShowAccountantPrompt(false);
   };
 
   return (
@@ -66,7 +82,7 @@ const DashboardLayout = () => {
               >
                 <span>{link.label}</span>
               </Link>
-            ) : (
+            ) : link.to === 'analytics-modal' ? (
               <div
                 key={link.to}
                 onClick={handleAnalyticsClick}
@@ -74,6 +90,18 @@ const DashboardLayout = () => {
                   ${location.pathname === '/analytics' && analyticsAuthenticated ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-gray-700 hover:text-blue-300 text-gray-200'}`}
                 style={{
                   backgroundColor: location.pathname === '/analytics' && analyticsAuthenticated ? THEME_COLORS.primary : '',
+                }}
+              >
+                <span>{link.label}</span>
+              </div>
+            ) : (
+              <div
+                key={link.to}
+                onClick={handleAccountingClick}
+                className={`flex items-center p-4 rounded-lg cursor-pointer transition-all duration-200 ease-in-out font-semibold text-lg relative
+                  ${location.pathname === '/accounting' && accountantAuthenticated ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-gray-700 hover:text-blue-300 text-gray-200'}`}
+                style={{
+                  backgroundColor: location.pathname === '/accounting' && accountantAuthenticated ? THEME_COLORS.primary : '',
                 }}
               >
                 <span>{link.label}</span>
@@ -106,6 +134,21 @@ const DashboardLayout = () => {
       <AnalyticsPasswordPrompt
         isVisible={showAnalyticsPrompt}
         onCancel={handleCloseAnalyticsPrompt}
+        onSuccess={() => {
+          setShowAnalyticsPrompt(false);
+          navigate('/analytics');
+        }}
+      />
+
+      {/* Accountant Password Prompt */}
+      <AnalyticsPasswordPrompt
+        isVisible={showAccountantPrompt}
+        onCancel={handleCloseAccountantPrompt}
+        onSuccess={() => {
+          setShowAccountantPrompt(false);
+          navigate('/accounting');
+        }}
+        isForAccountant={true}
       />
     </div>
   );

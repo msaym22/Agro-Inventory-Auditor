@@ -21,14 +21,13 @@ const SalesListPage = () => {
   // Redux states
   const { items: sales, loading, error, pagination } = useSelector(state => state.sales);
 
-  const [currentPage, setCurrentPage] = useState(pagination?.currentPage || 1);
   const [searchTerm, setSearchTerm] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Fetch on mount and when page changes (no fetch on search term typing)
+  // Fetch all sales on mount
   useEffect(() => {
-    dispatch(fetchSales({ page: currentPage, limit: 200 }));
-  }, [dispatch, currentPage]);
+    dispatch(fetchSales());
+  }, [dispatch]);
 
   // Client-side filter for smooth typing
   const filteredSales = useMemo(() => {
@@ -49,7 +48,6 @@ const SalesListPage = () => {
 
   const handleVoiceSearch = (transcript) => {
     setSearchTerm(transcript);
-    setCurrentPage(1);
   };
 
   const handleSelectSale = (sale) => {
@@ -88,9 +86,6 @@ const SalesListPage = () => {
     }
   };
 
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-  };
 
   if (loading) {
     return <Loading />;
@@ -126,30 +121,9 @@ const SalesListPage = () => {
       />
 
       {pagination && pagination.totalItems > 0 && (
-        <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
+        <div className="flex justify-center items-center mt-6 pt-4 border-t border-gray-100">
           <div className="text-gray-600 text-sm">
-            Showing {(pagination.currentPage - 1) * pagination.itemsPerPage + 1} - {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of {pagination.totalItems} sales
-          </div>
-          <div className="flex space-x-2">
-            <Button
-              onClick={() => setCurrentPage(prev => prev - 1)}
-              disabled={currentPage === 1}
-              variant="secondary"
-              size="small"
-            >
-              Previous
-            </Button>
-            <span className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-sm">
-              {currentPage}
-            </span>
-            <Button
-              onClick={() => setCurrentPage(prev => prev + 1)}
-              disabled={currentPage === pagination.totalPages}
-              variant="secondary"
-              size="small"
-            >
-              Next
-            </Button>
+            Total: {pagination.totalItems} sales
           </div>
         </div>
       )}
